@@ -4,32 +4,122 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>StorySpool</title>
-    <link href="{{ url_for('static', filename='css/output.css') }}" rel="stylesheet" />
-  </head>
-  <body class="min-h-screen bg-slate-50 text-slate-900">
-    <div class="max-w-3xl mx-auto p-4">
-      <header class="flex items-center justify-between py-4">
-        <div class="flex items-center gap-2">
-          <img src="{{ url_for('static', filename='brand/storyspool_mark.svg') }}" alt="StorySpool" class="w-8 h-8"/>
-          <h1 class="text-xl font-bold">StorySpool</h1>
-        </div>
-        <nav class="flex gap-3 text-sm">
-          <a class="underline" href="https://cloud.google.com/text-to-speech" target="_blank" rel="noopener">Google TTS</a>
-        </nav>
-      </header>
-      <main>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-          {% if messages %}
-            <div class="space-y-2">
-              {% for category, msg in messages %}
-              <div class="rounded-lg p-3 bg-amber-100 border border-amber-300">{{ msg }}</div>
-              {% endfor %}
+        <link href="{{ url_for('static', filename='css/output.css') }}" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='brand/storyspool_mark.svg') }}">
+    <title>StorySpool</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <style>
+        .auth-status { margin-left: auto; padding-right: 1rem; display: flex; align-items: center; }
+        .auth-status button { margin-left: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+    <header class="bg-white shadow-sm py-4">
+        <nav class="container mx-auto flex items-center justify-between px-4">
+            <a href="/" class="flex items-center">
+                <img src="{{ url_for('static', filename='brand/storyspool_mark.svg') }}" alt="StorySpool Logo" class="h-8 w-auto">
+                <span class="ml-2 text-xl font-semibold">StorySpool</span>
+            </a>
+            <div id="authStatus" class="auth-status">
+                <span id="authMessage">Not signed in</span>
+                <button id="signInButton" style="display: none;">Sign In</button>
+                <button id="signOutButton" style="display: none;">Sign Out</button>
             </div>
-          {% endif %}
-        {% endwith %}
+        </nav>
+    </header>
+    <main class="container mx-auto p-4">
         {% block content %}{% endblock %}
-      </main>
-      <footer class="py-10 text-center text-xs text-slate-500">© 2025 StorySpool</footer>
-    </div>
-  </body>
+    </main>
+    <footer class="bg-gray-200 text-center py-4 mt-8 text-sm text-gray-600">
+        &copy; 2024 StorySpool. All rights reserved.
+    </footer>
+
+    <script>
+        // TODO: Paste your Firebase config object here for local development.
+        // For staging/production, ensure this is loaded securely (e.g., from environment variables)
+        // and consider using Firebase Hosting or Cloud Functions to serve the config.
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const firebaseConfig = {
+        apiKey: "AIzaSyAgWw6PAqcJUFolPDWVYcKxKRP7IwiYLko",
+        authDomain: "storyspool-be776.firebaseapp.com",
+        projectId: "storyspool-be776",
+        storageBucket: "storyspool-be776.firebasestorage.app",
+        messagingSenderId: "417579885597",
+        appId: "1:417579885597:web:af29447d245af4f7c9d2f4",
+        measurementId: "G-FYE0G370KM"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const googleProvider = new firebase.auth.GoogleAuthProvider();
+
+        const authMessage = document.getElementById('authMessage');
+        const signInButton = document.getElementById('signInButton');
+        const signOutButton = document.getElementById('signOutButton');
+
+        // Helper to set a cookie
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            // For local development, path=/ is sufficient.
+            // For staging/production, ensure Secure; SameSite=None and serve over HTTPS.
+            document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+        }
+
+        // Helper to delete a cookie
+        function deleteCookie(name) {
+            document.cookie = name + "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+        }
+
+        // Handle sign-in
+        signInButton.onclick = () => {
+            auth.signInWithPopup(googleProvider)
+                .then((result) => {
+                    // Signed in
+                    console.info("Firebase: User signed in:", result.user.email);
+                })
+                .catch((error) => {
+                    console.error("Firebase: Sign-in error:", error);
+                });
+        };
+
+        // Handle sign-out
+        signOutButton.onclick = () => {
+            auth.signOut()
+                .then(() => {
+                    console.info("Firebase: User signed out.");
+                })
+                .catch((error) => {
+                    console.error("Firebase: Sign-out error:", error);
+                });
+        };
+
+        // Listen for authentication state changes
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                // User is signed in. Get ID token.
+                const idToken = await user.getIdToken();
+                setCookie('id_token', idToken, 1); // Set cookie for 1 day
+                authMessage.textContent = `Signed in as ${user.email}`;
+                signInButton.style.display = 'none';
+                signOutButton.style.display = 'inline-block';
+                console.info("Firebase: ID token obtained and cookie set.");
+            } else {
+                // User is signed out.
+                deleteCookie('id_token');
+                authMessage.textContent = 'Not signed in';
+                signInButton.style.display = 'inline-block';
+                signOutButton.style.display = 'none';
+                console.info("Firebase: User is signed out, ID token cookie cleared.");
+            }
+        });
+    </script>
+</body>
 </html>
