@@ -1,8 +1,12 @@
 import os
 
 REQUIRED_ENVS = [
-    "GCP_PROJECT","GCS_BUCKET","FIRESTORE_COLLECTION","BASE_URL",
+    "GCP_PROJECT",
+    "GCS_BUCKET",
+    "FIRESTORE_COLLECTION",
+    "BASE_URL",
 ]
+
 
 def load_config(app):
     # Flask
@@ -21,10 +25,14 @@ def load_config(app):
     app.config["BASE_URL"] = os.getenv("BASE_URL", "http://localhost:8080")
     # Firebase/Auth
     app.config["FIREBASE_PROJECT_ID"] = os.getenv("FIREBASE_PROJECT_ID", "")
-    app.config["ADMIN_UIDS"] = set(uid.strip() for uid in os.getenv("ADMIN_UIDS","").split(",") if uid.strip())
+    app.config["ADMIN_UIDS"] = set(
+        uid.strip() for uid in os.getenv("ADMIN_UIDS", "").split(",") if uid.strip()
+    )
     # Queue
     app.config["TASKS_QUEUE"] = os.getenv("TASKS_QUEUE", "speakaudio2-jobs")
     app.config["TASKS_LOCATION"] = os.getenv("TASKS_LOCATION", "us-central1")
     app.config["TASK_TOKEN"] = os.getenv("TASK_TOKEN", "")
     # Logging
-    app.config["DEV_PRETTY_LOGS"] = os.getenv("DEV_PRETTY_LOGS","true").lower()=="true"
+    app.config["DEV_PRETTY_LOGS"] = (
+        os.getenv("DEV_PRETTY_LOGS", "true").lower() == "true"
+    )

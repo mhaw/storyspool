@@ -1,13 +1,20 @@
-import uuid, pathlib
+import pathlib
+import uuid
 from datetime import datetime, timezone
+
 from flask import current_app
+
 from ..extensions import db, gcs
 from .users import current_user_id
+
 
 def _articles_col():
     return db.collection(current_app.config["FIRESTORE_COLLECTION"])
 
-def save_article_record(meta: dict, local_audio_path: str, gcs_url: str, urlhash: str, uid: str):
+
+def save_article_record(
+    meta: dict, local_audio_path: str, gcs_url: str, urlhash: str, uid: str
+):
     doc = {
         "id": urlhash,
         "user_id": uid,
@@ -25,12 +32,23 @@ def save_article_record(meta: dict, local_audio_path: str, gcs_url: str, urlhash
     _articles_col().document(urlhash).set(doc, merge=True)
     return doc
 
+
 def list_user_articles(uid: str):
-    if not uid: return []
-    qs = _articles_col().where("user_id","==",uid).order_by("created_at", direction="DESCENDING").limit(50).stream()
+    if not uid:
+        return []
+    qs = (
+        _articles_col()
+        .where("user_id", "==", uid)
+        .order_by("created_at", direction="DESCENDING")
+        .limit(50)
+        .stream()
+    )
     return [q.to_dict() for q in qs]
 
-def upload_audio_and_get_url(local_path: pathlib.Path, meta: dict, urlhash: str|None=None) -> str:
+
+def upload_audio_and_get_url(
+    local_path: pathlib.Path, meta: dict, urlhash: str | None = None
+) -> str:
     bucket = gcs.bucket(current_app.config["GCS_BUCKET"])
     key = f"audio/{urlhash or 'unknown'}/{datetime.now().strftime('%Y%m%d')}/{local_path.name}"
     blob = bucket.blob(key)
