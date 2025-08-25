@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="bg-white rounded-2xl shadow p-4 space-y-4">
+    <form id="addForm" method="post" action="/jobs" class="flex gap-2">
+      <input name="url" placeholder="Paste an article URL" class="flex-1 border rounded-lg px-3 py-2" />
+      <button class="px-4 py-2 rounded-lg bg-slate-900 text-white">Add</button>
+    </form>
+    {% if feed_url %}
+      <p class="text-sm">Your RSS: <a class="underline" href="{{ feed_url }}">{{ feed_url }}</a></p>
+    {% endif %}
+    <div class="divide-y">
+      {% for a in articles %}
+      <article class="py-3">
+        <h3 class="font-semibold">{{ a.title }}</h3>
+        <p class="text-sm text-slate-600">{{ a.site }} — <a class="underline" href="{{ a.url }}" target="_blank">original</a></p>
+        <audio controls class="w-full mt-2" src="{{ a.audio_url }}"></audio>
+      </article>
+      {% else %}
+      <p class="text-sm text-slate-600">No articles yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
