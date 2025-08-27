@@ -2,6 +2,7 @@ import datetime
 import hashlib
 
 import trafilatura
+from flask import current_app  # New import
 
 from app.extract.errors import (
     CanonicalizationError,
@@ -14,6 +15,8 @@ from app.extract.fetch import fetch_content
 from app.extract.models import ExtractedDocument
 from app.extract.normalize import normalize_url
 from app.extract.parse import detect_and_parse
+from app.extract.pdf_parser import extract_text_from_pdf  # New import
+from app.services.jobs import JobStatus  # New import
 
 
 # Placeholder for persistence (will be implemented later)
@@ -34,7 +37,7 @@ def post_process_document(document_data: dict) -> dict:
     """
     Placeholder for post-processing extracted data.
     This could include text cleaning, truncation, entity recognition, etc.
-    """
+    ""
     # For now, just truncate text_excerpt for storage
     text_excerpt = document_data.get("text", "")
     document_data["text_excerpt"] = text_excerpt[:500] if text_excerpt else None
@@ -95,7 +98,7 @@ async def extract_pipeline(url: str) -> ExtractedDocument:
         print(f"[ERROR] HTTP error for {canonical_url or url}: {e}")
     except ContentTypeError as e:
         status = "fetch_error"
-        error_code = e.error_code or "UNSUPPORTED_CONTENT_TYPE"
+        error_code = e.error_code or f"{JobStatus.FAILED_FETCH}_UNSUPPORTED_CONTENT_TYPE"
         print(f"[ERROR] Content type error for {canonical_url or url}: {e}")
     except ParseError as e:
         status = "parse_error"

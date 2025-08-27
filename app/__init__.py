@@ -1,6 +1,7 @@
 import logging
 
 from flask import Flask
+from pythonjsonlogger import jsonlogger
 
 from .config import load_config
 from .extensions import init_extensions
@@ -16,6 +17,19 @@ def create_app():
 
     # Set logging level to DEBUG for development
     app.logger.setLevel(logging.DEBUG)
+
+    # Configure JSON logging for production
+    if app.config.get("USE_STRUCTURED_LOGGING"):
+        handler = logging.StreamHandler()
+        formatter = jsonlogger.JsonFormatter(
+            "%(levelname)s %(asctime)s %(filename)s %(lineno)d %(message)s"
+        )
+        handler.setFormatter(formatter)
+        app.logger.addHandler(handler)
+        app.logger.info("Using structured JSON logging.")
+    else:
+        # Default Flask logger is already configured for console output
+        app.logger.info("Using basic console logging.")
 
     # Initialize Firebase Admin SDK and Firestore client
     # This will also log the resolved FIREBASE_PROJECT_ID and emulator status

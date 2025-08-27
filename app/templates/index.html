@@ -1,86 +1,317 @@
 {% extends "base.html" %}
+
 {% block content %}
-  <section class="bg-white rounded-2xl shadow p-4 space-y-4">
-    <form id="addForm" method="post" action="/jobs" class="flex gap-2">
-      <input name="url" placeholder="Paste an article URL" class="flex-1 border rounded-lg px-3 py-2" />
-      <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white">Add</button>
-    </form>
-    {% if articles %}
-      <div class="mt-4 space-y-4">
-        <h2 class="text-xl font-semibold">Your Stories</h2>
-        <ul id="articlesList" class="divide-y divide-gray-200">
-          {% for article in articles %}
-            <li class="py-4">
-              <div class="flex items-center justify-between">
-                <h3 class="text-lg font-medium">{{ article.title or 'Untitled Story' }}</h3>
-                <span class="text-sm text-gray-500 capitalize">{{ article.status }}</span>
-              </div>
-              {% if article.status == 'done' and article.audio_url %}
-                <div class="mt-2">
-                  <audio controls src="{{ article.audio_url }}" class="w-full"></audio>
-                </div>
-              {% elif article.status == 'error' %}
-                <p class="text-red-500 text-sm mt-2">Error: {{ article.last_error or 'Unknown error' }}</p>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-      </div>
-    {% else %}
-      <p id="noStoriesMessage" class="mt-4 text-gray-600">No stories yet. Add a URL above to get started!</p>
-    {% endif %}
-  </section>
+<div class="container mx-auto px-4 py-8">
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const addForm = document.getElementById('addForm');
-      const urlInput = addForm.querySelector('input[name="url"]');
-      const articlesList = document.getElementById('articlesList');
-      const noStoriesMessage = document.getElementById('noStoriesMessage');
+    <!-- Submission Form -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-200">Create New Audio</h2>
+        <form id="url-form">
+            <div class="flex items-center">
+                <input type="url" id="url-input" name="url" placeholder="https://www.example.com/article"
+                    class="flex-grow p-3 border rounded-l-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required>
+                <button type="submit" id="submit-button"
+                    class="bg-blue-600 text-white font-bold py-3 px-6 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400">
+                    Go
+                </button>
+            </div>
+        </form>
+    </div>
 
-      addForm.addEventListener('submit', async (event) => {
-        event.preventDefault(); // Prevent default form submission
+    <!-- Job List -->
+    <div id="job-list" class="space-y-4">
+        {% for job in jobs %}
+        {{ render_job_card(job) }}
+        {% endfor %}
+    </div>
 
+</div>
+
+<!-- Jinja Macro for rendering a job card -->
+{% macro render_job_card(job) -%}
+<div id="job-{{ job.id }}" class="job-card bg-white dark:bg-gray-800 shadow-md rounded-lg p-5" data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">
+    <div class="flex justify-between items-start">
+        <div class="flex-grow">
+            <h3 class="font-bold text-lg text-gray-900 dark:text-gray-100 break-words">{{ job.title or job.url }}</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ job.source_domain or (job.url | urlparse).netloc }}</p>
+        </div>
+        <div class="flex-shrink-0 ml-4">
+            {{ render_status_badge(job.status) }}
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <!-- Placeholder for dynamic content -->
+        <div class="dynamic-content"></div>
+    </div>
+
+    <div class="text-xs text-gray-400 dark:text-gray-500 mt-4 flex justify-between items-center">
+        <span>Job ID: {{ job.id }}</span>
+        <span>{{ job.created_at | timeago }}</span>
+    </div>
+</div>
+{%- endmacro %}
+
+<!-- Jinja Macro for status badges -->
+{% macro render_status_badge(status) -%}
+    {% set status_map = {
+        'queued': ('bg-gray-200 text-gray-800', 'Queued'),
+        'fetching': ('bg-blue-200 text-blue-800', 'Fetching'),
+        'parsing': ('bg-blue-200 text-blue-800', 'Parsing'),
+        'tts_generating': ('bg-indigo-200 text-indigo-800', 'Synthesizing'),
+        'uploading_audio': ('bg-purple-200 text-purple-800', 'Uploading'),
+        'done': ('bg-green-200 text-green-800', 'Complete'),
+        'failed_fetch': ('bg-red-200 text-red-800', 'Failed'),
+        'failed_parse': ('bg-red-200 text-red-800', 'Failed'),
+        'failed_tts': ('bg-red-200 text-red-800', 'Failed'),
+        'failed_upload': ('bg-red-200 text-red-800', 'Failed')
+    } %}
+    {% set color, text = status_map.get(status, ('bg-gray-200 text-gray-800', 'Unknown')) %}
+    <span class="status-badge inline-block px-2 py-1 text-sm font-semibold rounded-full {{ color }}">{{ text }}</span>
+{%- endmacro %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const jobList = document.getElementById('job-list');
+    const urlForm = document.getElementById('url-form');
+    const urlInput = document.getElementById('url-input');
+    const submitButton = document.getElementById('submit-button');
+
+    const STATUS_POLLING = ['queued', 'fetching', 'parsing', 'tts_generating', 'uploading_audio'];
+    const STATUS_FAILED = ['failed_fetch', 'failed_parse', 'failed_tts', 'failed_upload'];
+    const STATUS_COMPLETE = 'done';
+
+    // --- Main Functions ---
+
+    /**
+     * Handles the submission of the URL form using Fetch API.
+     */
+    async function handleFormSubmit(event) {
+        event.preventDefault();
         const url = urlInput.value.trim();
-        if (!url) {
-          alert('Please enter a URL.');
-          return;
-        }
+        if (!url) return;
 
-        // Assuming Firebase is initialized and firebase.auth() is available globally
-        const user = firebase.auth().currentUser;
-        if (!user) {
-          alert('You must be logged in to add a story.');
-          return;
-        }
+        submitButton.disabled = true;
+        submitButton.textContent = '...';
 
         try {
-          const idToken = await user.getIdToken();
+            const response = await fetch('/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
 
-          const response = await fetch('/jobs', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify({ url: url })
-          });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
 
-          const data = await response.json();
+            const newJob = await response.json();
 
-          if (response.ok) {
-            alert('Job queued successfully!');
-            urlInput.value = ''; // Clear input
-            // Optionally, refresh the page or dynamically add the new job to the list
-            window.location.reload(); // Simple refresh for now
-          } else {
-            alert(`Error: ${data.error || 'Something went wrong.'}`);
-          }
+            // Optimistically add the new job to the top of the list
+            const tempJob = {
+                id: newJob.job_id,
+                status: newJob.status,
+                url: url,
+                title: url,
+                source_domain: new URL(url).hostname,
+                created_at: new Date().toISOString()
+            };
+            addJobCardToDOM(tempJob, true);
+            pollJobStatus(newJob.job_id);
+
         } catch (error) {
-          console.error('Error submitting job:', error);
-          alert('An unexpected error occurred. Please try again.');
+            console.error('Submission error:', error);
+            // You could show an error message to the user here
+        } finally {
+            urlInput.value = '';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Go';
         }
-      });
-    });
-  </script>
+    }
+
+    /**
+     * Polls the status of a single job until it reaches a terminal state.
+     */
+    function pollJobStatus(jobId) {
+        const intervalId = setInterval(async () => {
+            try {
+                const response = await fetch(`/jobs/${jobId}`);
+                if (!response.ok) {
+                    clearInterval(intervalId);
+                    return;
+                }
+                const job = await response.json();
+                updateJobCard(job);
+
+                if (!STATUS_POLLING.includes(job.status)) {
+                    clearInterval(intervalId);
+                }
+            } catch (error) {
+                console.error(`Error polling job ${jobId}:`, error);
+                clearInterval(intervalId);
+            }
+        }, 3000);
+    }
+
+    /**
+     * Initializes polling for all in-progress jobs on page load.
+     */
+    function initializePolling() {
+        document.querySelectorAll('.job-card').forEach(card => {
+            const jobId = card.dataset.jobId;
+            const jobStatus = card.dataset.jobStatus;
+            if (STATUS_POLLING.includes(jobStatus)) {
+                pollJobStatus(jobId);
+            } else {
+                // For jobs already in a terminal state, render their final content
+                fetch(`/jobs/${jobId}`).then(res => res.json()).then(updateJobCard);
+            }
+        });
+    }
+
+    // --- DOM Manipulation ---
+
+    /**
+     * Adds a new job card to the top of the list.
+     */
+    function addJobCardToDOM(job, prepend = false) {
+        // Simple template rendering to avoid complex dependencies
+        const cardHTML = `
+            <div id="job-${job.id}" class="job-card bg-white dark:bg-gray-800 shadow-md rounded-lg p-5" data-job-id="${job.id}" data-job-status="${job.status}">
+                <div class="flex justify-between items-start">
+                    <div class="flex-grow">
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-gray-100 break-words">${job.title || job.url}</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">${job.source_domain || new URL(job.url).hostname}</p>
+                    </div>
+                    <div class="flex-shrink-0 ml-4">
+                        ${renderStatusBadge(job.status)}
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="dynamic-content">
+                        ${renderSpinner()}
+                    </div>
+                </div>
+                <div class="text-xs text-gray-400 dark:text-gray-500 mt-4 flex justify-between items-center">
+                    <span>Job ID: ${job.id}</span>
+                    <span>Just now</span>
+                </div>
+            </div>
+        `;
+        if (prepend) {
+            jobList.insertAdjacentHTML('afterbegin', cardHTML);
+        } else {
+            jobList.innerHTML += cardHTML;
+        }
+    }
+
+    /**
+     * Updates an existing job card with new data.
+     */
+    function updateJobCard(job) {
+        const card = document.getElementById(`job-${job.id}`);
+        if (!card) return;
+
+        card.dataset.jobStatus = job.status;
+        card.querySelector('.status-badge').outerHTML = renderStatusBadge(job.status);
+        card.querySelector('h3').textContent = job.title || job.url;
+
+        const dynamicContent = card.querySelector('.dynamic-content');
+        if (STATUS_POLLING.includes(job.status)) {
+            dynamicContent.innerHTML = renderSpinner();
+        } else if (job.status === STATUS_COMPLETE) {
+            dynamicContent.innerHTML = renderAudioPlayer(job);
+        } else if (STATUS_FAILED.includes(job.status)) {
+            dynamicContent.innerHTML = renderErrorContent(job);
+        }
+    }
+
+    /**
+     * Handles clicks on the retry button.
+     */
+    async function handleRetryClick(event) {
+        if (!event.target.classList.contains('retry-button')) return;
+
+        const jobId = event.target.dataset.jobId;
+        event.target.disabled = true;
+        event.target.textContent = 'Retrying...';
+
+        try {
+            await fetch(`/jobs/${jobId}/retry`, { method: 'POST' });
+            pollJobStatus(jobId); // Start polling again
+        } catch (error) {
+            console.error('Retry error:', error);
+            event.target.disabled = false;
+            event.target.textContent = 'Retry';
+        }
+    }
+
+
+    // --- HTML Render Helpers ---
+
+    function renderStatusBadge(status) {
+        const statusMap = {
+            'queued': ['bg-gray-200 text-gray-800', 'Queued'],
+            'fetching': ['bg-blue-200 text-blue-800', 'Fetching'],
+            'parsing': ['bg-blue-200 text-blue-800', 'Parsing'],
+            'tts_generating': ['bg-indigo-200 text-indigo-800', 'Synthesizing'],
+            'uploading_audio': ['bg-purple-200 text-purple-800', 'Uploading'],
+            'done': ['bg-green-200 text-green-800', 'Complete'],
+            'failed_fetch': ['bg-red-200 text-red-800', 'Failed'],
+            'failed_parse': ['bg-red-200 text-red-800', 'Failed'],
+            'failed_tts': ['bg-red-200 text-red-800', 'Failed'],
+            'failed_upload': ['bg-red-200 text-red-800', 'Failed']
+        };
+        const [color, text] = statusMap[status] || ['bg-gray-200 text-gray-800', 'Unknown'];
+        return `<span class="status-badge inline-block px-2 py-1 text-sm font-semibold rounded-full ${color}">${text}</span>`;
+    }
+
+    function renderSpinner() {
+        return `
+            <div class="flex items-center space-x-2">
+                <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span class="text-sm text-gray-500 dark:text-gray-400">Processing...</span>
+            </div>
+        `;
+    }
+
+    function renderAudioPlayer(job) {
+        return `
+            <div>
+                <audio controls class="w-full" src="${job.audio_url}">Your browser does not support the audio element.</audio>
+                <div class="mt-2 flex items-center space-x-4">
+                    <a href="${job.audio_url}" download class="text-sm text-blue-600 hover:underline">Download MP3</a>
+                    <a href="${job.url}" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-600 hover:underline">View Original</a>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderErrorContent(job) {
+        return `
+            <div class="bg-red-50 dark:bg-gray-700 border-l-4 border-red-400 p-4">
+                <p class="text-sm text-red-700 dark:text-red-300">${job.last_error || 'An unknown error occurred.'}</p>
+                <button class="retry-button mt-2 bg-red-600 text-white font-bold py-1 px-3 text-sm rounded hover:bg-red-700" data-job-id="${job.id}">
+                    Retry
+                </button>
+            </div>
+        `;
+    }
+
+    // --- Event Listeners ---
+    urlForm.addEventListener('submit', handleFormSubmit);
+    jobList.addEventListener('click', handleRetryClick);
+
+    // --- Initial Load ---
+    initializePolling();
+});
+</script>
 {% endblock %}

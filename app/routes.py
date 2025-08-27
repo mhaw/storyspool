@@ -8,11 +8,10 @@ from flask import (
     request,
 )
 
-from .services.jobs import create_job, get_job
+from .services.jobs import JobStatus, create_job, get_job, list_user_jobs, update_job
 from .services.queue import enqueue_worker
 from .services.rss import build_user_feed, user_feed_url
 from .services.security import validate_external_url
-from .services.store import list_user_articles
 from .services.users import current_user_id, require_login
 from .worker import run_job
 
@@ -32,9 +31,9 @@ def health():
 @bp.get("/")
 def index():
     uid = current_user_id()
-    articles = list_user_articles(uid) if uid else []
+    jobs = list_user_jobs(uid) if uid else []
     return render_template(
-        "index.html", articles=articles, feed_url=user_feed_url(uid) if uid else None
+        "index.html", jobs=jobs, feed_url=user_feed_url(uid) if uid else None
     )
 
 
@@ -59,6 +58,15 @@ def job_status(job_id):
     if not j:
         return jsonify({"error": "not found"}), 404
     return jsonify(j), 200
+
+
+@bp.post("/jobs/<job_id>/retry")
+@require_login
+def retry_ingest_job(job_id):
+    # Optional: check if user is allowed to retry this job
+    update_job(job_id, status=JobStatus.QUEUED, last_error=None)
+    enqueue_worker(job_id)
+    return jsonify({"status": "re-queued"}), 200
 
 
 @bp.post("/task/worker")

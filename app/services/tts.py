@@ -1,12 +1,20 @@
 import io
 import pathlib
 import re
+import string
 import tempfile
 import uuid
 
 from flask import current_app
+from google.api_core import exceptions as google_exceptions
 from google.cloud import texttospeech
 from pydub import AudioSegment  # Uncommented
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from .store import upload_audio_and_get_url
 
@@ -16,7 +24,19 @@ from .store import upload_audio_and_get_url
 MAX_CHARS = 4500
 
 
+def _normalize_text_for_ssml(text: str) -> str:
+    """Applies text normalization for better SSML generation."""
+    # Replace common abbreviations
+    text = re.sub(r"\bMr\.\b", "Mister", text)
+    text = re.sub(r"\bMrs\.\b", "Missus", text)
+    text = re.sub(r"\bDr\.\b", "Doctor", text)
+    # Add a small pause after common punctuation for natural flow
+    text = re.sub(r"([.!?])", r"\1<break time=\"100ms\"/>", text)
+    return text
+
+
 def chunk_text(text: str, max_len: int = MAX_CHARS):
+    text = _normalize_text_for_ssml(text)
     paragraphs = re.split(r"(\n\s*\n)", text)
     chunks, buf = [], ""
     for part in paragraphs:
@@ -43,11 +63,17 @@ def build_ssml(text: str):
     return "".join(ssml_parts)
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    retry=retry_if_exception_type(google_exceptions.GoogleAPICallError),
+)
 def synthesize_article_to_mp3(meta: dict, urlhash: str | None = None):
     """
     Synthesizes article text to MP3 audio using Google Cloud Text-to-Speech.
     Uploads the generated audio to Google Cloud Storage.
     """
+
     client = texttospeech.TextToSpeechClient()
 
     text = meta.get("text", "")

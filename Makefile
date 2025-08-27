@@ -28,6 +28,10 @@ install:
 test:
 	pytest -q
 
+# Run only the 3 specific failing tests, stop on first failure
+test-fast:
+	pytest -q tests/test_tts.py::test_chunk_text tests/test_worker.py::test_run_job_success tests/test_worker.py::test_run_job_failure -x
+
 # Run linting/formatting checks
 lint:
 	pre-commit run --all-files

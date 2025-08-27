@@ -1,11 +1,28 @@
 import os
+import sys
 
 REQUIRED_ENVS = [
     "GCP_PROJECT",
     "GCS_BUCKET",
     "FIRESTORE_COLLECTION",
     "BASE_URL",
+    "FIREBASE_PROJECT_ID",
+    "TASK_TOKEN",
 ]
+
+
+def _validate_config(app):
+    missing_envs = []
+    for env_var in REQUIRED_ENVS:
+        if not app.config.get(env_var):
+            missing_envs.append(env_var)
+
+    if missing_envs:
+        app.logger.error(
+            f"Missing or empty required environment variables: {', '.join(missing_envs)}. "
+            "Please set them before running the application."
+        )
+        sys.exit(1)  # Exit application if critical configs are missing
 
 
 def load_config(app):
@@ -39,3 +56,5 @@ def load_config(app):
     app.config["USE_STRUCTURED_LOGGING"] = (
         os.getenv("USE_STRUCTURED_LOGGING", "false").lower() == "true"
     )
+
+    _validate_config(app)

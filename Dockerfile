@@ -25,11 +25,14 @@ COPY .firebaserc ./
 ARG FIREBASE_PROJECT_ID
 
 RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID is not set." && exit 1)
-RUN npm install -g firebase-tools
+RUN npm install -g firebase-tools@13.10.0 # Pin firebase-tools version
 RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
 RUN mkdir -p dataconnect-generated/js/default-connector && \
     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
 RUN npm ci && npm rebuild
+
+# Install Playwright browsers (after npm ci/rebuild for better caching)
+RUN playwright install --with-deps chromium
 
 # Now, copy the rest of the application code
 COPY . .
@@ -43,7 +46,14 @@ FROM python:3.12-slim AS final
 WORKDIR /app
 
 # Install only necessary runtime system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    poppler-utils \
+    libnss3 \
+    libfontconfig1 \
+    libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
 RUN adduser --system --group appuser
@@ -65,4 +75,4 @@ ENV PATH="/usr/local/bin:$PATH"
 ENV PORT=8080
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 CMD curl -f http://localhost:8080/health || exit 1
-CMD ["gunicorn", "-w", "2", "-k", "gevent", "--bind", "0.0.0.0:8080", "wsgi:app"]
+CMD ["sh", "-c", "exec gunicorn -w ${GUNICORN_WORKERS:-2} -k ${GUNICORN_WORKER_CLASS:-gevent} --bind 0.0.0.0:${PORT} ${GUNICORN_APP:-wsgi:app} --timeout ${GUNICORN_TIMEOUT:-120} --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30}"]

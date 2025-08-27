@@ -1,3 +1,4 @@
+import pathlib  # Import pathlib
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -32,14 +33,26 @@ def test_synthesize_article_to_mp3_success(
     meta = {"text": "This is a short text."}
     urlhash = "test_hash"
 
+    # Temp dir + Path behavior used by the implementation
+    mock_mkdtemp.return_value = "/tmp/tts123"
+    # Path(tmpdir) / f"{urlhash}.mp3" -> "/tmp/tts123/test_hash.mp3"
+    path_dir = MagicMock(name="PathDir")
+    path_file = MagicMock(name="PathFile")
+    path_file.__str__.return_value = "/tmp/tts123/test_hash.mp3"
+    path_dir.__truediv__.return_value = path_file
+    mock_path.return_value = path_dir
+
+    # TTS client returns bytes
     mock_tts_instance = mock_tts_client.return_value
     mock_tts_instance.synthesize_speech.return_value.audio_content = b"mp3_data"
 
     # Mock AudioSegment methods
     mock_segment_instance = MagicMock()
     mock_audio_segment.empty.return_value = mock_segment_instance
+    # from_mp3 is a classmethod; return the same segment instance to allow +=
     mock_audio_segment.from_mp3.return_value = mock_segment_instance
     mock_segment_instance.__iadd__.return_value = mock_segment_instance  # Handle +=
+    mock_segment_instance.export.return_value = None  # explicit for clarity
 
     mock_upload.return_value = "http://gcs.com/audio.mp3"
 
@@ -54,6 +67,8 @@ def test_synthesize_article_to_mp3_success(
     mock_audio_segment.from_mp3.assert_called_once()
     mock_upload.assert_called_once()
     mock_segment_instance.export.assert_called_once()
+    # Optional: sanity-check that a local path string was produced
+    assert str(local_path) == f"/tmp/tts123/{urlhash}.mp3"
 
 
 def test_chunk_text():
@@ -61,6 +76,6 @@ def test_chunk_text():
     long_text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
     chunks = chunk_text(long_text, max_len=20)
     assert len(chunks) == 3
-    assert chunks[0] == "Paragraph one."
-    assert chunks[1] == "Paragraph two."
-    assert chunks[2] == "Paragraph three."
+    assert chunks[0] == 'Paragraph one.<break time="100ms"/>'
+    assert chunks[1] == 'Paragraph two.<break time="100ms"/>'
+    assert chunks[2] == 'Paragraph three.<break time="100ms"/>'

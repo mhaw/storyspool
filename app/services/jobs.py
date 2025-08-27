@@ -6,6 +6,19 @@ from flask import current_app  # New import
 JOB_COL = "jobs"
 
 
+class JobStatus:
+    QUEUED = "queued"
+    FETCHING = "fetching"
+    PARSING = "parsing"
+    TTS_GENERATING = "tts_generating"
+    UPLOADING_AUDIO = "uploading_audio"
+    DONE = "done"
+    FAILED_FETCH = "failed_fetch"
+    FAILED_PARSE = "failed_parse"
+    FAILED_TTS = "failed_tts"
+    FAILED_UPLOAD = "failed_upload"
+
+
 def url_hash(url: str) -> str:
     return sha256(url.encode("utf-8")).hexdigest()[:12]
 
@@ -33,7 +46,7 @@ def create_job(url: str, uid: str) -> dict:
         "url": url,
         "urlhash": h,
         "user_id": uid,
-        "status": "queued",
+        "status": JobStatus.QUEUED,
         "created_at": now_iso(),
         "updated_at": now_iso(),
         "last_error": None,
@@ -49,6 +62,21 @@ def get_job(job_id: str) -> dict | None:
     return s.to_dict() if s.exists else None
 
 
+def list_user_jobs(uid: str):
+    if not uid:
+        return []
+    qs = (
+        _jobs()
+        .where("user_id", "==", uid)
+        .order_by("created_at", direction="DESCENDING")
+        .limit(50)
+        .stream()
+    )
+    return [q.to_dict() for q in qs]
+
+
 def update_job(job_id: str, **fields):
     fields["updated_at"] = now_iso()
+    if "metrics" in fields:
+        fields["metrics"] = fields["metrics"]  # Ensure metrics are stored
     _jobs().document(job_id).set(fields, merge=True)

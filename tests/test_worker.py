@@ -56,10 +56,17 @@ def test_run_job_success(
     assert message == "ok"
 
     # Check that the job status was updated correctly
-    assert mock_update_job.call_count == 2
-    mock_update_job.assert_any_call(job_id, status="running")
+    assert mock_update_job.call_count == 5
+    mock_update_job.assert_any_call(job_id, status="fetching")
+    mock_update_job.assert_any_call(job_id, status="parsing", title="Test Title")
+    mock_update_job.assert_any_call(job_id, status="tts_generating")
+    mock_update_job.assert_any_call(job_id, status="uploading_audio")
     mock_update_job.assert_any_call(
-        job_id, status="done", audio_url="http://gcs.com/audio.mp3", title="Test Title"
+        job_id,
+        status="done",
+        audio_url="http://gcs.com/audio.mp3",
+        title="Test Title",
+        processing_duration_seconds=0,  # processing_duration_seconds is added by run_job
     )
 
     # Verify that all the services were called
@@ -93,7 +100,9 @@ def test_run_job_failure(mock_extract, mock_update_job, mock_get_job, mock_app_c
 
     # Check that the job status was updated to running, then to error
     assert mock_update_job.call_count == 2
-    mock_update_job.assert_any_call(job_id, status="running")
+    mock_update_job.assert_any_call(job_id, status="fetching")
     mock_update_job.assert_any_call(
-        job_id, status="error", last_error=exception_message
+        job_id,
+        status="failed_fetch",
+        last_error="We couldn't process this URL. It might be a paywalled article, a video, or a page without a clear body of text. Please try a different URL.",
     )
