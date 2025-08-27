@@ -26,15 +26,66 @@ jobs:
           gcloud services enable artifactregistry.googleapis.com run.googleapis.com cloudbuild.googleapis.com
           gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
           TAG=${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${REPO}/${IMAGE}:${{ github.sha }}
-          docker build -t $TAG .
+          docker build --build-arg FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT }} --cache-from=$TAG --cache-to=$TAG,mode=max -t $TAG .
           docker push $TAG
+      - name: Install Syft and Trivy
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+          curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      - name: Generate SBOM with Syft
+        run: |
+          syft packages docker.io/$TAG -o spdx-json > sbom.spdx.json
+      - name: Scan Image with Trivy
+        run: |
+          trivy image --exit-code 1 --severity CRITICAL,HIGH $TAG
+      - name: Setup Cosign
+        uses: sigstore/cosign-installer@v3.4.0
+      - name: Sign and Generate SLSA Provenance
+        run: |
+          cosign sign --yes $TAG
+          cosign attest --yes --predicate sbom.spdx.json --type spdx $TAG
       - name: Deploy
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             SVC=storyspool-staging
             ENV=staging
+            FIRESTORE_COLLECTION_VAL=articles_staging
+            GCS_BUCKET_VAL=speakaudio2-audio-staging
+            TASKS_QUEUE_VAL=speakaudio2-jobs
           else
             SVC=storyspool-prod
             ENV=prod
+            FIRESTORE_COLLECTION_VAL=articles
+            GCS_BUCKET_VAL=speakaudio2-audio
+            TASKS_QUEUE_VAL=speakaudio2-jobs
           fi
-          gcloud run deploy $SVC             --image ${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${REPO}/${IMAGE}:${{ github.sha }}             --region $REGION --allow-unauthenticated             --service-account ${{ secrets.DEPLOY_SA }}             --set-env-vars GCP_PROJECT=${{ secrets.GCP_PROJECT }},ENV=$ENV
+          gcloud run deploy $SVC \
+            --image ${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT }}/${REPO}/${IMAGE}:${{ github.sha }} \
+            --region $REGION --allow-unauthenticated \
+            --service-account ${{ secrets. জৈSA }} \
+            --set-env-vars \
+              GCP_PROJECT=${{ secrets.GCP_PROJECT }},
+              ENV=$ENV,
+              FIRESTORE_COLLECTION=$FIRESTORE_COLLECTION_VAL,
+              GCS_BUCKET=$GCS_BUCKET_VAL,
+              TTS_VOICE=en-US-Neural2-C,
+              TTS_SPEAKING_RATE=1.0,
+              TTS_PITCH=0.0,
+              TASKS_QUEUE=$TASKS_QUEUE_VAL,
+              TASKS_LOCATION=$REGION,
+              FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT }},
+              ADMIN_UIDS=${{ secrets.ADMIN_UIDS }} \
+            --set-secrets=
+              TASK_TOKEN=TASK_TOKEN:latest,
+              SECRET_KEY=SECRET_KEY:latest
+      - name: Record Deployment Details for Rollback
+        if: success()
+        run: |
+          echo "SERVICE_NAME=$SVC" >> $GITHUB_ENV
+          echo "DEPLOYED_REVISION=$(gcloud run services describe $SVC --region $REGION --format='value(status.latestCreatedRevisionName)')" >> $GITHUB_ENV
+      - name: Manual Rollback (if needed)
+        if: failure() # This is a placeholder for a manual or conditional rollback
+        run: |
+          echo "Deployment failed. To rollback, run:"
+          echo "gcloud run services update-traffic ${{ env.SERVICE_NAME }} --to-revisions=${{ env.DEPLOYED_REVISION }}=100 --region $REGION"
+          echo "Or revert to a previous stable revision using its name."

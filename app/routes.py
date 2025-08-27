@@ -9,13 +9,17 @@ from .services.store import list_user_articles
 from .services.users import current_user_id, require_login
 from .worker import run_job
 
-
 bp = Blueprint("main", __name__)
 
 
 @bp.get("/healthz")
 def healthz():
     return "ok", 200
+
+
+@bp.get("/health")
+def health():
+    return {"status": "ok"}, 200
 
 
 @bp.get("/")
@@ -55,24 +59,19 @@ def task_worker():
     provided_token = request.headers.get("X-Task-Token")
     expected_token = current_app.config["TASK_TOKEN"]
 
-    # Temporary logging for debugging
-    masked_expected = (
-        f"{expected_token[:3]}...{expected_token[-3:]}"
-        if expected_token and len(expected_token) > 6
-        else expected_token
-    )
-    masked_provided = (
-        f"{provided_token[:3]}...{provided_token[-3:]}"
-        if provided_token and len(provided_token) > 6
-        else provided_token
-    )
-    current_app.logger.info(
-        f"Task token check: Provided='{masked_provided}', Expected='{masked_expected}'"
-    )
-
     if provided_token != expected_token:
+        current_app.logger.warning("Task token mismatch. Aborting 403.")
         abort(403)
+
+        current_app.logger.debug(
+        f"Received /task/worker request. request.json: {request.json}"
+    )
     job_id = (request.json or {}).get("job_id")
+
+    if not job_id:
+        current_app.logger.error("Missing job_id in /task/worker request.")
+        return ({"ok": False, "msg": "Missing job_id"}, 400)
+
     ok, msg = run_job(job_id)
     return ({"ok": ok, "msg": msg}, 200 if ok else 500)
 
@@ -83,3 +82,28 @@ def user_feed(uid):
 
     xml = build_user_feed(uid)
     return Response(xml, mimetype="application/rss+xml")
+
+
+@bp.get("/_health/firestore")
+def firestore_health_check():
+    from flask import current_app
+
+    try:
+        db = current_app.config.get("FIRESTORE_DB")
+        if db is None:
+            return {
+                "status": "error",
+                "message": "Firestore client not found in app config",
+            }, 500
+        # Attempt a simple operation to confirm connectivity
+        # This assumes you have a collection named 'health_check' and a document 'test'
+        # You might need to create these manually in the emulator UI if they don't exist
+        db.collection("health_check").document("test").get()
+        return {
+            "status": "ok",
+            "message": "Firestore client initialized and connected",
+        }, 200
+    except Exception as e:
+        return {"status": "error", "message": f"Firestore connection failed: {e}"}, 500
+500
+ {e}"}, 500

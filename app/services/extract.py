@@ -1,5 +1,4 @@
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from urllib.parse import urlparse
 
 import requests
@@ -47,34 +46,50 @@ def extract_article(url: str) -> dict:
         include_images=False,
         output="json",
     )
-    title = None
-    author = None
-    text = ""
-    summary = None
-    image = None
-    published = None
-    canonical = None
-    lang = None
+    data = {}  # Initialize data as empty dict
     if result:
         import json as _json
 
-        data = _json.loads(result)
-        title = data.get("title")
-        author = data.get("author", "") or None
-        text = data.get("text", "")
-        summary = data.get("summary") or None
-        image = data.get("image") or None
-        published = data.get("date") or None
-        canonical = data.get("source") or None
-        lang = data.get("language") or None
+        from flask import \
+            current_app  # Ensure current_app is imported for logging
+
+        try:
+            data = _json.loads(result)
+        except _json.JSONDecodeError:
+            current_app.logger.warning(
+                f"Trafilatura returned invalid JSON for {url}. Falling back to HTML parsing."
+            )
+            data = {}  # Reset data if JSON parsing fails
+
+    title = data.get("title")
+    author = data.get("author", "") or None
+    text = data.get("text", "")
+    summary = data.get("summary") or None
+    image = data.get("image") or None
+    published = data.get("date") or None
+    canonical = data.get("source") or None
+    lang = data.get("language") or None
+
+    # Fallback to direct HTML parsing if structured data is missing or JSON parsing failed
     if not title or not text:
-        resp = requests.get(url, timeout=20)
+        # Ensure current_app is imported for logging
+        from flask import current_app
+
+        current_app.logger.debug(f"Falling back to direct HTML parsing for {url}")
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/91.0.4472.124 Safari/537.36"
+            )
+        }
+        resp = requests.get(url, headers=headers, timeout=20)
         resp.raise_for_status()
         html = resp.text
         if not title:
             title = _fallback_title(html)
         if not text:
-            text = trafilatura.extract(html) or ""
+            text = trafilatura.extract(html) or ""  # Extract plain text
         if not canonical:
             canonical = _canonical_url(html, url)
     site = urlparse(url).netloc

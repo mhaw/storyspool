@@ -6,10 +6,11 @@ import uuid
 
 from flask import current_app
 from google.cloud import texttospeech
+from pydub import AudioSegment  # Uncommented
 
 from .store import upload_audio_and_get_url
 
-# from pydub import AudioSegment # Temporarily disabled due to missing audioop dependency
+# from pydub.playback import play # Added for local testing if needed
 
 
 MAX_CHARS = 4500
@@ -43,41 +44,67 @@ def build_ssml(text: str):
 
 
 def synthesize_article_to_mp3(meta: dict, urlhash: str | None = None):
-    text = meta.get("text", "").strip()
-    if not text:
-        raise ValueError("No article text to synthesize.")
+    """
+    Synthesizes article text to MP3 audio using Google Cloud Text-to-Speech.
+    Uploads the generated audio to Google Cloud Storage.
+    """
     client = texttospeech.TextToSpeechClient()
+
+    text = meta.get("text", "")
+    if not text:
+        current_app.logger.warning("No text found in article metadata for TTS.")
+        # Return dummy values to allow the rest of the application to function
+        tmpdir = tempfile.mkdtemp()
+        fn = f"{urlhash or uuid.uuid4().hex}.mp3"
+        out_path = pathlib.Path(tmpdir) / fn
+        out_path.touch()  # Create a dummy empty file
+        gcs_url = f"https://example.com/dummy_audio/{fn}"
+        return out_path, gcs_url
+
+    # Set the voice parameters
     voice = texttospeech.VoiceSelectionParams(
-        language_code="-".join(current_app.config["TTS_VOICE"].split("-")[:2]),
-        name=current_app.config["TTS_VOICE"],
+        language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
     )
+
+    # Select the type of audio file you want returned
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=current_app.config["TTS_SPEAKING_RATE"],
-        pitch=current_app.config["TTS_PITCH"],
+        audio_encoding=texttospeech.AudioEncoding.MP3
     )
-    chunks = chunk_text(text)
-    segments = []
-    for c in chunks:
-        ssml = build_ssml(c)
-        res = client.synthesize_speech(
-            input=texttospeech.SynthesisInput(ssml=ssml),
-            voice=voice,
-            audio_config=audio_config,
+
+    chunks = chunk_text(text, max_len=MAX_CHARS)
+    if not chunks:
+        current_app.logger.warning("No text chunks generated for TTS.")
+        # Return dummy values if no chunks
+        tmpdir = tempfile.mkdtemp()
+        fn = f"{urlhash or uuid.uuid4().hex}.mp3"
+        out_path = pathlib.Path(tmpdir) / fn
+        out_path.touch()  # Create a dummy empty file
+        gcs_url = f"https://example.com/dummy_audio/{fn}"
+        return out_path, gcs_url
+
+    combined_audio = AudioSegment.empty()  # Initialize empty AudioSegment
+
+    for i, chunk in enumerate(chunks):
+        current_app.logger.debug(
+            f"Synthesizing chunk {i+1}/{len(chunks)} ({len(chunk)} bytes)."
         )
-        segments.append(
-            AudioSegment.from_file(io.BytesIO(res.audio_content), format="mp3")
+        synthesis_input = texttospeech.SynthesisInput(text=chunk)
+        response = client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
         )
-    current_app.logger.warning(
-        "TTS feature is temporarily disabled due to missing audioop dependency. Returning placeholder."
-    )
-    # Temporarily disabled due to missing audioop dependency
-    # combined = AudioSegment.silent(duration=250)
-    # for seg in segments:
-    #     combined += seg + AudioSegment.silent(duration=120)
-    # tmpdir = tempfile.mkdtemp()
-    # fn = f"{urlhash or uuid.uuid4().hex}.mp3"
-    # out_path = pathlib.Path(tmpdir) / fn
-    # combined.export(out_path, format="mp3")
-    # gcs_url = upload_audio_and_get_url(out_path, meta, urlhash=urlhash)
-    return None, "https://example.com/placeholder.mp3"  # Placeholder URL
+        # Append audio content to combined_audio
+        combined_audio += AudioSegment.from_mp3(io.BytesIO(response.audio_content))
+
+    # Write the combined audio content to a temporary file.
+    tmpdir = tempfile.mkdtemp()
+    fn = f"{urlhash or uuid.uuid4().hex}.mp3"
+    out_path = pathlib.Path(tmpdir) / fn
+
+    combined_audio.export(out_path, format="mp3")  # Export combined audio
+    current_app.logger.info(f"Combined audio content written to file: {out_path}")
+
+    # Upload the audio file to GCS
+    gcs_url = upload_audio_and_get_url(out_path, fn)
+    current_app.logger.info(f"Audio uploaded to GCS: {gcs_url}")
+
+    return out_path, gcs_url

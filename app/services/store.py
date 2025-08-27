@@ -4,11 +4,15 @@ from datetime import datetime, timezone
 
 from flask import current_app
 
-from ..extensions import db, gcs
-from .users import current_user_id
+from ..extensions import gcs  # Keep gcs import
 
 
 def _articles_col():
+    db = current_app.config.get("FIRESTORE_DB")
+    if db is None:
+        raise RuntimeError(
+            "Firestore client not initialized. FIRESTORE_DB is missing in app.config."
+        )
     return db.collection(current_app.config["FIRESTORE_COLLECTION"])
 
 
@@ -46,11 +50,12 @@ def list_user_articles(uid: str):
     return [q.to_dict() for q in qs]
 
 
-def upload_audio_and_get_url(
-    local_path: pathlib.Path, meta: dict, urlhash: str | None = None
-) -> str:
+def upload_audio_and_get_url(local_path: pathlib.Path, filename: str) -> str:
     bucket = gcs.bucket(current_app.config["GCS_BUCKET"])
-    key = f"audio/{urlhash or 'unknown'}/{datetime.now().strftime('%Y%m%d')}/{local_path.name}"
+        key = (
+        f"audio/{uuid.uuid4().hex}/"
+        f"{datetime.now().strftime('%Y%m%d')}/{filename}"
+    )  # Use filename directly
     blob = bucket.blob(key)
     blob.upload_from_filename(str(local_path))
     blob.make_public()

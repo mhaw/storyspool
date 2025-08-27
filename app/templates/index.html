@@ -3,21 +3,84 @@
   <section class="bg-white rounded-2xl shadow p-4 space-y-4">
     <form id="addForm" method="post" action="/jobs" class="flex gap-2">
       <input name="url" placeholder="Paste an article URL" class="flex-1 border rounded-lg px-3 py-2" />
-      <button class="px-4 py-2 rounded-lg bg-slate-900 text-white">Add</button>
+      <button type="submit" class="px-4 py-2 rounded-lg bg-slate-900 text-white">Add</button>
     </form>
-    {% if feed_url %}
-      <p class="text-sm">Your RSS: <a class="underline" href="{{ feed_url }}">{{ feed_url }}</a></p>
+    {% if articles %}
+      <div class="mt-4 space-y-4">
+        <h2 class="text-xl font-semibold">Your Stories</h2>
+        <ul id="articlesList" class="divide-y divide-gray-200">
+          {% for article in articles %}
+            <li class="py-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-lg font-medium">{{ article.title or 'Untitled Story' }}</h3>
+                <span class="text-sm text-gray-500 capitalize">{{ article.status }}</span>
+              </div>
+              {% if article.status == 'done' and article.audio_url %}
+                <div class="mt-2">
+                  <audio controls src="{{ article.audio_url }}" class="w-full"></audio>
+                </div>
+              {% elif article.status == 'error' %}
+                <p class="text-red-500 text-sm mt-2">Error: {{ article.last_error or 'Unknown error' }}</p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% else %}
+      <p id="noStoriesMessage" class="mt-4 text-gray-600">No stories yet. Add a URL above to get started!</p>
     {% endif %}
-    <div class="divide-y">
-      {% for a in articles %}
-      <article class="py-3">
-        <h3 class="font-semibold">{{ a.title }}</h3>
-        <p class="text-sm text-slate-600">{{ a.site }} — <a class="underline" href="{{ a.url }}" target="_blank">original</a></p>
-        <audio controls class="w-full mt-2" src="{{ a.audio_url }}"></audio>
-      </article>
-      {% else %}
-      <p class="text-sm text-slate-600">No articles yet.</p>
-      {% endfor %}
-    </div>
   </section>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const addForm = document.getElementById('addForm');
+      const urlInput = addForm.querySelector('input[name="url"]');
+      const articlesList = document.getElementById('articlesList');
+      const noStoriesMessage = document.getElementById('noStoriesMessage');
+
+      addForm.addEventListener('submit', async (event) => {
+        event.preventDefault(); // Prevent default form submission
+
+        const url = urlInput.value.trim();
+        if (!url) {
+          alert('Please enter a URL.');
+          return;
+        }
+
+        // Assuming Firebase is initialized and firebase.auth() is available globally
+        const user = firebase.auth().currentUser;
+        if (!user) {
+          alert('You must be logged in to add a story.');
+          return;
+        }
+
+        try {
+          const idToken = await user.getIdToken();
+
+          const response = await fetch('/jobs', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${idToken}`
+            },
+            body: JSON.stringify({ url: url })
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            alert('Job queued successfully!');
+            urlInput.value = ''; // Clear input
+            // Optionally, refresh the page or dynamically add the new job to the list
+            window.location.reload(); // Simple refresh for now
+          } else {
+            alert(`Error: ${data.error || 'Something went wrong.'}`);
+          }
+        } catch (error) {
+          console.error('Error submitting job:', error);
+          alert('An unexpected error occurred. Please try again.');
+        }
+      });
+    });
+  </script>
 {% endblock %}

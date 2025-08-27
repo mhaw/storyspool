@@ -36,3 +36,6 @@ def load_config(app):
     app.config["DEV_PRETTY_LOGS"] = (
         os.getenv("DEV_PRETTY_LOGS", "true").lower() == "true"
     )
+    app.config["USE_STRUCTURED_LOGGING"] = (
+        os.getenv("USE_STRUCTURED_LOGGING", "false").lower() == "true"
+    )

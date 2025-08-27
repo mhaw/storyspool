@@ -51,7 +51,7 @@ check-app:
 	@$(PYTHON) -c 'import importlib, os, sys; mod = os.getenv("GUNICORN_APP","wsgi:app").split(":")[0]; print(f"[check] Importing {mod} ..."); importlib.import_module(mod); assert hasattr(sys.modules[mod], "app"); print("[check] OK")'
 
 # Build and deploy (requires gcloud + config in scripts/)
-deploy-staging:
+deploy-staging: check-app
 	@echo "Building container image with Cloud Build..."
 	gcloud builds submit . --config=cloudbuild.yaml --substitutions=_FIREBASE_PROJECT_ID=$(GCP_PROJECT)
 	@echo "Deploying image to Cloud Run..."

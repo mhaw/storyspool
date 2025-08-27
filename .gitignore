@@ -14,3 +14,8 @@ __pycache__/
 
 # Project Specific
 project_utilities/
+dataconnect/
+dataconnect-debug.log
+dataconnect-generated/
+firebase-export-1756214884261ivNzmk/
+firestore-debug.log

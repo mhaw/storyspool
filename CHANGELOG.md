@@ -1,5 +1,14 @@
 ## [Unreleased]
 ### Fixed
+- **Cloud Run Startup Failure**: Corrected `Dockerfile` `CMD` to use JSON exec form, removing dependency on `bash` which is absent in the `python:3.12-slim` base image. This resolves container startup errors.
+- **Health Check**: Updated `Dockerfile` `HEALTHCHECK` to use a new `/health` endpoint.
+
+### Added
+- **Health Check Endpoint**: Added a `/health` route to `app/routes.py` for container health monitoring.
+- **Makefile Pre-flight Check**: Added a `check-app` target to the `Makefile` to verify the application is importable before deployment.
+
+## [Unreleased]
+### Fixed
 - **Build Failure:** Excluded `node_modules` and other artifacts from the git repository and Cloud Build source uploads by configuring `.gitignore` and `.gcloudignore`. This resolves build timeouts by significantly reducing the source bundle size.
 ### Added
 - **CI Guardrail:** Added a check to the CI pipeline to fail the build if `node_modules` or `.venv` are ever committed.

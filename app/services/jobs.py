@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from hashlib import sha256
 
-from ..extensions import db
+from flask import current_app  # New import
 
 JOB_COL = "jobs"
 
@@ -15,6 +15,11 @@ def now_iso():
 
 
 def _jobs():
+    db = current_app.config.get("FIRESTORE_DB")
+    if db is None:
+        raise RuntimeError(
+            "Firestore client not initialized. FIRESTORE_DB is missing in app.config."
+        )
     return db.collection(JOB_COL)
 
 
