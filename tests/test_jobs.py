@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import pytest
 from flask import Flask
 
-from app.services.jobs import create_job, get_job, update_job
+from app.services.jobs import create_job
 
 
 @pytest.fixture

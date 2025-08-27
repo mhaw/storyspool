@@ -4,8 +4,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import Flask
 
-from app.services.store import (_articles_col, list_user_articles,
-                                save_article_record, upload_audio_and_get_url)
+from app.services.store import (
+    _articles_col,
+    list_user_articles,
+    save_article_record,
+    upload_audio_and_get_url,
+)
 
 
 def test_articles_col_initialization():

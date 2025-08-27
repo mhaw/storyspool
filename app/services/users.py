@@ -54,9 +54,7 @@ def current_user():
     except Exception as e:
         # Log failures as one-liners, no stack unless debug is enabled.
         log_level = (
-            current_app.logger.debug
-            if current_app.debug
-            else current_app.logger.error
+            current_app.logger.debug if current_app.debug else current_app.logger.error
         )
         log_level(f"Token verification failed: {e}")
         return None
@@ -82,8 +80,5 @@ def require_login(fn):
             abort(401)
         g.user = u
         return fn(*args, **kwargs)
-
-    return wrapper
-gs)
 
     return wrapper

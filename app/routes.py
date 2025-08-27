@@ -1,5 +1,12 @@
-from flask import (Blueprint, abort, current_app, flash, jsonify,
-                   render_template, request)
+from flask import (
+    Blueprint,
+    abort,
+    current_app,
+    flash,
+    jsonify,
+    render_template,
+    request,
+)
 
 from .services.jobs import create_job, get_job
 from .services.queue import enqueue_worker
@@ -63,7 +70,7 @@ def task_worker():
         current_app.logger.warning("Task token mismatch. Aborting 403.")
         abort(403)
 
-        current_app.logger.debug(
+    current_app.logger.debug(
         f"Received /task/worker request. request.json: {request.json}"
     )
     job_id = (request.json or {}).get("job_id")
@@ -105,5 +112,3 @@ def firestore_health_check():
         }, 200
     except Exception as e:
         return {"status": "error", "message": f"Firestore connection failed: {e}"}, 500
-500
- {e}"}, 500

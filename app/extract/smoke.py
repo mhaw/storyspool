@@ -1,8 +1,9 @@
 import argparse
 import asyncio
 
-from app.extract import \
-    extract_pipeline  # Assuming extract_pipeline is exposed in __init__.py
+from app.extract import (  # Assuming extract_pipeline is exposed in __init__.py
+    extract_pipeline,
+)
 
 
 async def main():

@@ -50,8 +50,7 @@ def extract_article(url: str) -> dict:
     if result:
         import json as _json
 
-        from flask import \
-            current_app  # Ensure current_app is imported for logging
+        from flask import current_app  # Ensure current_app is imported for logging
 
         try:
             data = _json.loads(result)

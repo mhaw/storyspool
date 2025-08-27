@@ -5,7 +5,7 @@ Ensures the SDK is initialized once with the correct project ID and returns a Fi
 
 import os
 
-from firebase_admin import auth, credentials, firestore, initialize_app
+from firebase_admin import firestore, initialize_app
 
 
 def init_firebase_admin(app_config, app_logger):

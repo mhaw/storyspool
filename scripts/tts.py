@@ -1,11 +1,11 @@
-import argparse
-import hashlib
-import json
 import os
 import sys
 
-# Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+import argparse
+import hashlib
+import json
 
 from app import create_app
 from app.services.tts import synthesize_article_to_mp3

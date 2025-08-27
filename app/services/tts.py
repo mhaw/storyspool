@@ -86,7 +86,7 @@ def synthesize_article_to_mp3(meta: dict, urlhash: str | None = None):
 
     for i, chunk in enumerate(chunks):
         current_app.logger.debug(
-            f"Synthesizing chunk {i+1}/{len(chunks)} ({len(chunk)} bytes)."
+            f"Synthesizing chunk {i + 1}/{len(chunks)} ({len(chunk)} bytes)."
         )
         synthesis_input = texttospeech.SynthesisInput(text=chunk)
         response = client.synthesize_speech(

@@ -52,9 +52,8 @@ def list_user_articles(uid: str):
 
 def upload_audio_and_get_url(local_path: pathlib.Path, filename: str) -> str:
     bucket = gcs.bucket(current_app.config["GCS_BUCKET"])
-        key = (
-        f"audio/{uuid.uuid4().hex}/"
-        f"{datetime.now().strftime('%Y%m%d')}/{filename}"
+    key = (
+        f"audio/{uuid.uuid4().hex}/" f"{datetime.now().strftime('%Y%m%d')}/{filename}"
     )  # Use filename directly
     blob = bucket.blob(key)
     blob.upload_from_filename(str(local_path))

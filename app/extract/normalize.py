@@ -32,7 +32,6 @@ def normalize_url(url: str) -> str:
 
         # Scheme and hostname to lowercase
         scheme = parsed_url.scheme.lower()
-        hostname = parsed_url.hostname.lower() if parsed_url.hostname else ""
 
         # Remove default ports
         netloc = parsed_url.netloc

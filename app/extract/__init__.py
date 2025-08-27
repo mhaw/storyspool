@@ -1,12 +1,15 @@
-import asyncio
 import datetime
 import hashlib
 
 import trafilatura
 
-from app.extract.errors import (CanonicalizationError, ContentTypeError,
-                                ExtractionError, HTTPError, NetworkError,
-                                ParseError)
+from app.extract.errors import (
+    CanonicalizationError,
+    ContentTypeError,
+    HTTPError,
+    NetworkError,
+    ParseError,
+)
 from app.extract.fetch import fetch_content
 from app.extract.models import ExtractedDocument
 from app.extract.normalize import normalize_url
