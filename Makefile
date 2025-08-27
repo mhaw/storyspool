@@ -1,3 +1,8 @@
+GCP_PROJECT ?= $(shell gcloud config get-value project 2>/dev/null)
+ifeq ($(GCP_PROJECT),)
+$(error GCP_PROJECT is not set. Please run `gcloud config set project <your-project-id>` or pass it as an argument: `make deploy-staging GCP_PROJECT=<your-project-id>`)
+endif
+
 # StorySpool Makefile
 
 # Default Python/venv
@@ -48,6 +53,7 @@ deploy-staging:
 			TASKS_LOCATION=us-central1 \
 		--set-secrets=TASK_TOKEN=SPEAKAUDIO2_TASK_TOKEN:latest
 
+
 deploy-prod:
 	gcloud run deploy storyspool-prod \
 		--source . \
@@ -63,6 +69,7 @@ extract:
 	@$(PYTHON) scripts/extract.py $(URL) > .cache/extracted_article.json
 	@echo "Article data saved to .cache/extracted_article.json"
 
+
 tts: .cache/extracted_article.json
 	@echo "Synthesizing audio from .cache/extracted_article.json"
 	@$(PYTHON) scripts/tts.py .cache/extracted_article.json
@@ -70,10 +77,4 @@ tts: .cache/extracted_article.json
 .PHONY: failed-build-logs
 failed-build-logs:
 	@echo "Fetching logs for the last failed build..."
-	@LAST_FAILED_BUILD_ID=$(gcloud builds list --filter="status='FAILURE'" --limit=1 --format="value(id)"); \
-	if [ -n "$LAST_FAILED_BUILD_ID" ]; then \
-	  echo "Last failed build ID: $LAST_FAILED_BUILD_ID"; \
-	  gcloud builds log $LAST_FAILED_BUILD_ID | tail -n 200; \
-	else \
-	  echo "No failed builds found."; \
-	fi
+	@./scripts/get_last_failed_build_log.sh
