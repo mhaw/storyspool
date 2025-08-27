@@ -1,4 +1,3 @@
-# STAGE 1: Build Environment
 FROM python:3.12-slim AS build
 WORKDIR /app
 
@@ -16,16 +15,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies first to leverage caching
 # This layer only rebuilds if requirements.txt changes
-COPY requirements.txt ./
+COPY requirements.txt ./ 
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Node.js dependencies, generating the Data Connect SDK first
-COPY package.json package-lock.json ./
-COPY .firebaserc ./
+COPY package.json package-lock.json ./ 
+COPY .firebaserc ./ 
 ARG FIREBASE_PROJECT_ID
 
 RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID is not set." && exit 1)
-RUN npm install -g firebase-tools@13.10.0 # Pin firebase-tools version
+RUN npm install -g firebase-tools@13.2.0 # Pin firebase-tools version
 RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
 RUN mkdir -p dataconnect-generated/js/default-connector && \
     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
