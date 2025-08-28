@@ -105,31 +105,55 @@ def task_worker():
 @bp.get("/u/<uid>/feed.xml")
 def user_feed(uid):
     """Generates the user's podcast feed on-demand with caching."""
-    # TODO: Add authorization check if feeds are not public.
-    items = rss.get_latest_items_for_user(uid, limit=100)
+    if not uid:
+        current_app.logger.warning("Attempted to access user feed with empty UID.")
+        abort(400, description="User ID is required for feed.")
 
-    user = {
-        "user_id": uid
-    }  # Replace with actual user lookup if needed for more details
-    user_articles_url = url_for("main.article_list", _external=True)
+    try:
+        # TODO: Add authorization check if feeds are not public.
+        items = rss.get_latest_items_for_user(uid, limit=100)
 
-    channel = {
-        "title": f"StorySpool Feed for {user['user_id']}",
-        "link": user_articles_url,
-        "description": "Your personal feed of narrated articles from StorySpool.",
-        "author": "StorySpool",
-        "owner_name": "StorySpool",
-        "owner_email": "support@storyspool.com",
-        "image_url": url_for(
-            "static", filename="brand/storyspool_mark.svg", _external=True
-        ),
-    }
+        user = {
+            "user_id": uid
+        }  # Replace with actual user lookup if needed for more details
+        user_articles_url = url_for("main.article_list", _external=True)
 
-    xml = rss.build_feed(uid, channel, items)
+        channel = {
+            "title": f"StorySpool Feed for {user['user_id']}",
+            "link": user_articles_url,
+            "description": "Your personal feed of narrated articles from StorySpool.",
+            "author": "StorySpool",
+            "owner_name": "StorySpool",
+            "owner_email": "support@storyspool.com",
+            "image_url": url_for(
+                "static", filename="brand/storyspool_mark.svg", _external=True
+            ),
+        }
 
-    resp = Response(xml, mimetype="application/rss+xml; charset=utf-8")
-    resp.headers["Cache-Control"] = "public, max-age=300"  # Cache for 5 minutes
-    return resp
+        xml = rss.build_feed(uid, channel, items)
+
+        resp = Response(xml, mimetype="application/rss+xml; charset=utf-8")
+        resp.headers["Cache-Control"] = "public, max-age=300"  # Cache for 5 minutes
+        return resp
+    except Exception as e:
+        current_app.logger.exception(f"Error generating RSS feed for user {uid}: {e}")
+        # Return an empty, but valid, RSS feed to prevent client crashes
+        empty_xml = rss.build_feed(
+            uid,
+            {
+                "title": f"Error Feed for {uid}",
+                "link": url_for("main.article_list", _external=True),
+                "description": "There was an error generating this feed.",
+                "author": "StorySpool",
+                "owner_name": "StorySpool",
+                "owner_email": "support@storyspool.com",
+            },
+            [],
+        )
+        resp = Response(empty_xml, mimetype="application/rss+xml; charset=utf-8")
+        resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        resp.status_code = 500
+        return resp
 
 
 @bp.get("/_health/firestore")
