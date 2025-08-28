@@ -2,7 +2,16 @@ FROM python:3.12-slim AS build
 WORKDIR /app
 
 # Install system-level dependencies that rarely change
-RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     curl     nodejs     npm     ffmpeg     git     libsndfile1     jq     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    nodejs \
+    npm \
+    ffmpeg \
+    git \
+    libsndfile1 \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first to leverage caching
 # This layer only rebuilds if requirements.txt changes
@@ -18,11 +27,12 @@ RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID i
 RUN npm install -g firebase-tools@13.21.0 # Pin firebase-tools version
 RUN firebase --version # Debugging firebase-tools version
 RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
-RUN mkdir -p dataconnect-generated/js/default-connector &&     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
+RUN mkdir -p dataconnect-generated/js/default-connector && \
+    echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
 RUN npm ci && npm rebuild
 
 # Install Playwright browsers (after npm ci/rebuild for better caching)
-RUN playwright install --with-deps chromium
+RUN npx playwright install --with-deps chromium
 
 # Now, copy the rest of the application code
 COPY . .
@@ -36,7 +46,14 @@ FROM python:3.12-slim AS final
 WORKDIR /app
 
 # Install only necessary runtime system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends     ffmpeg     libsndfile1     poppler-utils     libnss3     libfontconfig1     libgbm1     && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libsndfile1 \
+    poppler-utils \
+    libnss3 \
+    libfontconfig1 \
+    libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
 RUN adduser --system --group appuser
