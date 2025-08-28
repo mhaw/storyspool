@@ -14,7 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Node.js dependencies
 COPY package.json package-lock.json ./
-RUN npm ci
 
 # Generate Data Connect SDK (depends on .firebaserc and FIREBASE_PROJECT_ID)
 # This step should ideally be cached.
@@ -24,6 +23,9 @@ RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID i
 RUN npm install -g firebase-tools@13 # Pin firebase-tools to a stable major to avoid unexpected CLI changes
 RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
 RUN mkdir -p dataconnect-generated/js/default-connector &&     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
+
+# Now run npm ci to install all dependencies, including the generated file: dependency
+RUN npm ci
 
 # Build frontend assets (depends on input.css and tailwind.config.js)
 # Copy only necessary files for this step
