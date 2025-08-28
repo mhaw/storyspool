@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./app/templates/**/*.html", "./app/static/**/*.js"],
+  content: ["./app/templates/**/*.html"],
   theme: { extend: {
     colors: {
       charcoal: "#1F2937",
