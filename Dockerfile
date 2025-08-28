@@ -12,28 +12,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Node.js dependencies, generating the Data Connect SDK first
+# Install Node.js dependencies
 COPY package.json package-lock.json ./
-COPY .firebaserc ./
-ARG FIREBASE_PROJECT_ID
-
-RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID is not set." && exit 1)
-RUN npm cache clean --force
-# Pin firebase-tools to a stable major to avoid unexpected CLI changes
-RUN npm install -g firebase-tools@13
-RUN firebase --version # Debugging firebase-tools version
-RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
-RUN mkdir -p dataconnect-generated/js/default-connector &&     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
 RUN npm ci
 
-# Install Playwright browsers (optional; uncomment if needed)
-# RUN npx playwright install --with-deps chromium
+# Generate Data Connect SDK (depends on .firebaserc and FIREBASE_PROJECT_ID)
+# This step should ideally be cached.
+COPY .firebaserc ./
+ARG FIREBASE_PROJECT_ID
+RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID is not set." && exit 1)
+RUN npm install -g firebase-tools@13 # Pin firebase-tools to a stable major to avoid unexpected CLI changes
+RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
+RUN mkdir -p dataconnect-generated/js/default-connector &&     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
+
+# Build frontend assets (depends on input.css and tailwind.config.js)
+# Copy only necessary files for this step
+COPY app/static/css/input.css app/static/css/input.css
+COPY tailwind.config.js ./
+RUN npx tailwindcss -i app/static/css/input.css -o app/static/css/output.css --minify
 
 # Now, copy the rest of the application code
+# This should be the last COPY . . in the build stage
 COPY . .
-
-# Run build steps that depend on the full source code
-RUN npx tailwindcss -i app/static/css/input.css -o app/static/css/output.css --minify
 
 
 # STAGE 2: Final Production Image
