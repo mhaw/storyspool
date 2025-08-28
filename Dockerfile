@@ -1,9 +1,11 @@
 FROM python:3.12-slim AS build
 WORKDIR /app
 
-RUN ls -l /etc/apt/ # Debugging sources.list location
-# Enable non-free repository for fonts-ubuntu
-RUN sed -i 's/main/main contrib non-free/' /etc/apt/sources.list
+# Create sources.list for apt-get
+RUN echo "deb http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list && \
+    echo "deb http://deb.debian.org/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list
+
 # Install system-level dependencies that rarely change
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -18,11 +20,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-ubuntu \
     fonts-noto \
     fonts-noto-color-emoji \
+    fonts-noto-pdf \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first to leverage caching
 # This layer only rebuilds if requirements.txt changes
-COPY requirements.txt ./ 
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Node.js dependencies, generating the Data Connect SDK first
