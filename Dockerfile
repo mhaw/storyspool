@@ -31,6 +31,9 @@ RUN npm ci
 # Copy only necessary files for this step
 COPY app/static/css/input.css app/static/css/input.css
 COPY tailwind.config.js ./
+# Copy templates and static JS for TailwindCSS to scan
+COPY app/templates/ ./app/templates/
+COPY app/static/js/ ./app/static/js/
 RUN npx tailwindcss -i app/static/css/input.css -o app/static/css/output.css --minify
 
 # Now, copy the rest of the application code
