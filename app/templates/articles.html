@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+
+    <!-- Header Section -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 dark:text-gray-200 mb-4 md:mb-0">My Articles</h1>
+        <button id="rss-button" class="flex items-center justify-center bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm0 6a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V9zm0 6a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3z" />
+            </svg>
+            Get My Podcast Feed
+        </button>
+    </div>
+
+
+    <!-- Submission Form -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-8">
+        <h2 class="text-2xl font-bold mb-4 text-gray-800 dark:text-gray-200">Create New Audio</h2>
+        <form id="url-form">
+            <div class="flex items-center">
+                <input type="url" id="url-input" name="url" placeholder="https://www.example.com/article"
+                    class="flex-grow p-3 border rounded-l-md dark:bg-gray-700 dark:border-gray-600 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required>
+                <button type="submit" id="submit-button"
+                    class="bg-blue-600 text-white font-bold py-3 px-6 rounded-r-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400">
+                    Go
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Article Table -->
+    <div class="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
+        <table class="min-w-full leading-normal">
+            <thead class="hidden md:table-header-group">
+                <tr>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Article
+                    </th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Status
+                    </th>
+                    <th class="px-5 py-3 border-b-2 border-gray-200 bg-gray-100 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Actions
+                    </th>
+                </tr>
+            </thead>
+            <tbody id="job-list">
+                {% for job in jobs %}
+                    {{ render_job_row(job) }}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- RSS Feed Modal -->
+<div id="rss-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+                </svg>
+            </div>
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2" id="modal-title">Your Personal Podcast Feed</h3>
+            <div class="mt-2 px-7 py-3">
+                <p class="text-sm text-gray-500 mb-4">
+                    Paste this link into your favorite podcast app to subscribe to your personal feed.
+                </p>
+                <input type="text" readonly id="rss-url-input" value="{{ feed_url }}" class="w-full bg-gray-100 border rounded-md p-2 text-sm text-gray-700">
+            </div>
+            <div class="items-center px-4 py-3">
+                <button id="copy-rss-button" class="px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Copy to Clipboard
+                </button>
+                <button id="close-modal-button" class="mt-2 px-4 py-2 bg-gray-200 text-gray-800 text-base font-medium rounded-md w-full shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Jinja Macro for rendering a job row -->
+{% macro render_job_row(job) -%}
+<tr id="job-{{ job.id }}" class="job-row border-b border-gray-200 md:border-none block md:table-row" data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">
+    <td class="p-5 md:table-cell block">
+        <div class="flex items-center">
+            <div class="ml-3">
+                <p class="text-gray-900 whitespace-no-wrap font-bold break-words">
+                    {{ job.title or job.url }}
+                </p>
+                <p class="text-gray-600 whitespace-no-wrap text-sm">{{ job.source_domain or (job.url | urlparse).netloc }}</p>
+            </div>
+        </div>
+    </td>
+    <td class="p-5 md:table-cell block">
+        {{ render_status_badge(job.status) }}
+    </td>
+    <td class="p-5 md:table-cell block">
+        <div class="dynamic-content">
+            <!-- Content will be injected by JavaScript -->
+        </div>
+    </td>
+</tr>
+{%- endmacro %}
+
+<!-- Jinja Macro for status badges -->
+{% macro render_status_badge(status) -%}
+    {% set status_map = {
+        'queued': ('bg-gray-200 text-gray-800', 'Queued'),
+        'fetching': ('bg-blue-200 text-blue-800', 'Fetching'),
+        'parsing': ('bg-blue-200 text-blue-800', 'Parsing'),
+        'tts_generating': ('bg-indigo-200 text-indigo-800', 'Synthesizing'),
+        'uploading_audio': ('bg-purple-200 text-purple-800', 'Uploading'),
+        'done': ('bg-green-200 text-green-800', 'Complete'),
+        'failed_fetch': ('bg-red-200 text-red-800', 'Fetch Failed'),
+        'failed_parse': ('bg-red-200 text-red-800', 'Parse Failed'),
+        'failed_tts': ('bg-red-200 text-red-800', 'Synth Failed'),
+        'failed_upload': ('bg-red-200 text-red-800', 'Upload Failed')
+    } %}
+    {% set color, text = status_map.get(status, ('bg-gray-200 text-gray-800', 'Unknown')) %}
+    <span class="status-badge inline-block px-2 py-1 text-sm font-semibold rounded-full {{ color }}">{{ text }}</span>
+{%- endmacro %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const jobList = document.getElementById('job-list');
+    const urlForm = document.getElementById('url-form');
+    const urlInput = document.getElementById('url-input');
+    const submitButton = document.getElementById('submit-button');
+
+    // Modal elements
+    const rssButton = document.getElementById('rss-button');
+    const rssModal = document.getElementById('rss-modal');
+    const closeModalButton = document.getElementById('close-modal-button');
+    const copyRssButton = document.getElementById('copy-rss-button');
+    const rssUrlInput = document.getElementById('rss-url-input');
+
+    const STATUS_POLLING = ['queued', 'fetching', 'parsing', 'tts_generating', 'uploading_audio'];
+    const STATUS_FAILED = ['failed_fetch', 'failed_parse', 'failed_tts', 'failed_upload'];
+    const STATUS_COMPLETE = 'done';
+
+    // --- Main Functions ---
+
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        const url = urlInput.value.trim();
+        if (!url) return;
+
+        submitButton.disabled = true;
+        submitButton.textContent = '...';
+
+        try {
+            const response = await fetch('/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ url: url })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+
+            const newJob = await response.json();
+            const tempJob = {
+                id: newJob.job_id,
+                status: newJob.status,
+                url: url,
+                title: url,
+                source_domain: new URL(url).hostname,
+                created_at: new Date().toISOString()
+            };
+            addJobRowToDOM(tempJob, true);
+            pollJobStatus(newJob.job_id);
+
+        } catch (error) {
+            console.error('Submission error:', error);
+            // You could show an error message to the user here
+        } finally {
+            urlInput.value = '';
+            submitButton.disabled = false;
+            submitButton.textContent = 'Go';
+        }
+    }
+
+    function pollJobStatus(jobId) {
+        const intervalId = setInterval(async () => {
+            try {
+                const response = await fetch(`/jobs/${jobId}`);
+                if (!response.ok) {
+                    clearInterval(intervalId);
+                    return;
+                }
+                const job = await response.json();
+                updateJobRow(job);
+
+                if (!STATUS_POLLING.includes(job.status)) {
+                    clearInterval(intervalId);
+                }
+            } catch (error) {
+                console.error(`Error polling job ${jobId}:`, error);
+                clearInterval(intervalId);
+            }
+        }, 3000);
+    }
+
+    function initializePolling() {
+        document.querySelectorAll('.job-row').forEach(row => {
+            const jobId = row.dataset.jobId;
+            const jobStatus = row.dataset.jobStatus;
+            // Always fetch latest job data to render the correct state
+            fetch(`/jobs/${jobId}`).then(res => res.json()).then(updateJobRow);
+
+            if (STATUS_POLLING.includes(jobStatus)) {
+                pollJobStatus(jobId);
+            }
+        });
+    }
+
+    // --- DOM Manipulation ---
+
+    function addJobRowToDOM(job, prepend = false) {
+        const rowHTML = `
+            <tr id="job-${job.id}" class="job-row border-b border-gray-200 md:border-none block md:table-row" data-job-id="${job.id}" data-job-status="${job.status}">
+                <td class="p-5 md:table-cell block">
+                    <div class="flex items-center">
+                        <div class="ml-3">
+                            <p class="text-gray-900 whitespace-no-wrap font-bold break-words">${job.title || job.url}</p>
+                            <p class="text-gray-600 whitespace-no-wrap text-sm">${job.source_domain || new URL(job.url).hostname}</p>
+                        </div>
+                    </div>
+                </td>
+                <td class="p-5 md:table-cell block">${renderStatusBadge(job.status)}</td>
+                <td class="p-5 md:table-cell block"><div class="dynamic-content">${renderSpinner()}</div></td>
+            </tr>
+        `;
+        if (prepend) {
+            jobList.insertAdjacentHTML('afterbegin', rowHTML);
+        } else {
+            jobList.innerHTML += rowHTML;
+        }
+    }
+
+    function updateJobRow(job) {
+        const row = document.getElementById(`job-${job.id}`);
+        if (!row) return;
+
+        row.dataset.jobStatus = job.status;
+        row.querySelector('.status-badge').outerHTML = renderStatusBadge(job.status);
+        row.querySelector('.font-bold').textContent = job.title || job.url;
+
+        const dynamicContent = row.querySelector('.dynamic-content');
+        if (STATUS_POLLING.includes(job.status)) {
+            dynamicContent.innerHTML = renderSpinner();
+        } else if (job.status === STATUS_COMPLETE) {
+            dynamicContent.innerHTML = renderCompletedActions(job);
+        } else if (STATUS_FAILED.includes(job.status)) {
+            dynamicContent.innerHTML = renderErrorContent(job);
+        }
+    }
+
+    async function handleRetryClick(event) {
+        if (!event.target.classList.contains('retry-button')) return;
+
+        const jobId = event.target.dataset.jobId;
+        event.target.disabled = true;
+        event.target.textContent = 'Retrying...';
+
+        try {
+            await fetch(`/jobs/${jobId}/retry`, { method: 'POST' });
+            const row = document.getElementById(`job-${jobId}`);
+            const dynamicContent = row.querySelector('.dynamic-content');
+            dynamicContent.innerHTML = renderSpinner();
+            pollJobStatus(jobId);
+        } catch (error) {
+            console.error('Retry error:', error);
+            event.target.disabled = false;
+            event.target.textContent = 'Retry';
+        }
+    }
+
+    // --- HTML Render Helpers ---
+
+    function renderStatusBadge(status) {
+        const statusMap = {
+            'queued': ['bg-gray-200 text-gray-800', 'Queued'],
+            'fetching': ['bg-blue-200 text-blue-800', 'Fetching'],
+            'parsing': ['bg-blue-200 text-blue-800', 'Parsing'],
+            'tts_generating': ['bg-indigo-200 text-indigo-800', 'Synthesizing'],
+            'uploading_audio': ['bg-purple-200 text-purple-800', 'Uploading'],
+            'done': ['bg-green-200 text-green-800', 'Complete'],
+            'failed_fetch': ['bg-red-200 text-red-800', 'Fetch Failed'],
+            'failed_parse': ['bg-red-200 text-red-800', 'Parse Failed'],
+            'failed_tts': ['bg-red-200 text-red-800', 'Synth Failed'],
+            'failed_upload': ['bg-red-200 text-red-800', 'Upload Failed']
+        };
+        const [color, text] = statusMap[status] || ['bg-gray-200 text-gray-800', 'Unknown'];
+        return `<span class="status-badge inline-block px-2 py-1 text-sm font-semibold rounded-full ${color}">${text}</span>`;
+    }
+
+    function renderSpinner() {
+        return `<div class="flex items-center space-x-2 text-sm text-gray-500">
+                    <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Processing...</span>
+                </div>`;
+    }
+
+    function renderCompletedActions(job) {
+        return `<div class="flex items-center space-x-2">
+                    <a href="${job.audio_url}" target="_blank" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-600 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" /></svg>
+                        Listen
+                    </a>
+                    <div class="relative inline-block" x-data="{ open: false }" @click.away="open = false">
+                        <button @click="open = !open" class="p-2 rounded-md hover:bg-gray-100">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" /></svg>
+                        </button>
+                        <div x-show="open" x-transition class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10">
+                            <a href="${job.audio_url}" download class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Download MP3</a>
+                            <a href="${job.url}" target="_blank" rel="noopener noreferrer" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">View Original</a>
+                        </div>
+                    </div>
+                </div>`;
+    }
+
+    function renderErrorContent(job) {
+        return `<div class="flex items-center space-x-2">
+                    <span class="text-sm text-red-600">${job.last_error || 'An unknown error occurred.'}</span>
+                    <button class="retry-button text-sm text-blue-600 hover:underline" data-job-id="${job.id}">Retry</button>
+                </div>`;
+    }
+
+    // --- Modal Logic ---
+    rssButton.addEventListener('click', () => rssModal.classList.remove('hidden'));
+    closeModalButton.addEventListener('click', () => rssModal.classList.add('hidden'));
+    copyRssButton.addEventListener('click', () => {
+        rssUrlInput.select();
+        document.execCommand('copy');
+        copyRssButton.textContent = 'Copied!';
+        setTimeout(() => { copyRssButton.textContent = 'Copy to Clipboard'; }, 2000);
+    });
+
+
+    // --- Event Listeners ---
+    urlForm.addEventListener('submit', handleFormSubmit);
+    jobList.addEventListener('click', handleRetryClick);
+
+    // --- Initial Load ---
+    initializePolling();
+});
+</script>
+<script src="https://cdn.jsdelivr.net/gh/alpinejs/alpine@v2.x.x/dist/alpine.min.js" defer></script>
+{% endblock %}

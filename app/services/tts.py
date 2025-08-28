@@ -1,7 +1,6 @@
 import io
 import pathlib
 import re
-import string
 import tempfile
 import uuid
 
@@ -53,7 +52,7 @@ def chunk_text(text: str, max_len: int = MAX_CHARS):
 
 def build_ssml(text: str):
     # Simple SSML: wrap paragraphs with small breaks
-    paras = [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
+    paras = [p.strip() for p in re.split(r"(\n\s*\n)", text) if p.strip()]
     ssml_parts = ["<speak>"]
     for i, p in enumerate(paras):
         ssml_parts.append(f"<p>{p}</p>")

@@ -12,7 +12,6 @@ def run_job(job_id: str):
     job_start_time = time.time()
     j = get_job(job_id)
     content_id = j.get("urlhash", "unknown")
-    metrics = {}
 
     log_extra = {"job_id": job_id, "content_id": content_id}
 
@@ -97,9 +96,17 @@ def run_job(job_id: str):
         )
         return True, "ok"
     except Exception as e:
-        error_status = JobStatus.FAILED_FETCH  # Default to fetch error
-        # TODO: More granular error handling to set specific FAILED_* statuses
         job_duration = time.time() - job_start_time
+        current_status = get_job(job_id).get("status", JobStatus.QUEUED)
+
+        error_status_map = {
+            JobStatus.FETCHING: JobStatus.FAILED_FETCH,
+            JobStatus.PARSING: JobStatus.FAILED_PARSE,
+            JobStatus.TTS_GENERATING: JobStatus.FAILED_TTS,
+            JobStatus.UPLOADING_AUDIO: JobStatus.FAILED_UPLOAD,
+        }
+        error_status = error_status_map.get(current_status, JobStatus.FAILED_FETCH)
+
         user_friendly_error = "We couldn't process this URL. It might be a paywalled article, a video, or a page without a clear body of text. Please try a different URL."
         current_app.logger.error(
             "Worker: Job failed",

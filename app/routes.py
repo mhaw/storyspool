@@ -1,16 +1,19 @@
 from flask import (
     Blueprint,
+    Response,
     abort,
     current_app,
     flash,
     jsonify,
+    redirect,
     render_template,
     request,
+    url_for,
 )
 
+from .services import rss
 from .services.jobs import JobStatus, create_job, get_job, list_user_jobs, update_job
 from .services.queue import enqueue_worker
-from .services.rss import build_user_feed, user_feed_url
 from .services.security import validate_external_url
 from .services.users import current_user_id, require_login
 from .worker import run_job
@@ -31,10 +34,18 @@ def health():
 @bp.get("/")
 def index():
     uid = current_user_id()
-    jobs = list_user_jobs(uid) if uid else []
-    return render_template(
-        "index.html", jobs=jobs, feed_url=user_feed_url(uid) if uid else None
-    )
+    if uid:
+        return redirect(url_for("main.article_list"))
+    return render_template("index.html")
+
+
+@bp.get("/articles")
+@require_login
+def article_list():
+    uid = current_user_id()
+    jobs = list_user_jobs(uid)
+    feed_url = url_for("main.user_feed", uid=uid, _external=True)  # noqa: F841
+    return render_template("articles.html", jobs=jobs, feed_url=feed_url)
 
 
 @bp.post("/jobs")
@@ -93,10 +104,32 @@ def task_worker():
 
 @bp.get("/u/<uid>/feed.xml")
 def user_feed(uid):
-    from flask import Response
+    """Generates the user's podcast feed on-demand with caching."""
+    # TODO: Add authorization check if feeds are not public.
+    items = rss.get_latest_items_for_user(uid, limit=100)
 
-    xml = build_user_feed(uid)
-    return Response(xml, mimetype="application/rss+xml")
+    user = {
+        "user_id": uid
+    }  # Replace with actual user lookup if needed for more details
+    user_articles_url = url_for("main.article_list", _external=True)
+
+    channel = {
+        "title": f"StorySpool Feed for {user['user_id']}",
+        "link": user_articles_url,
+        "description": "Your personal feed of narrated articles from StorySpool.",
+        "author": "StorySpool",
+        "owner_name": "StorySpool",
+        "owner_email": "support@storyspool.com",
+        "image_url": url_for(
+            "static", filename="brand/storyspool_mark.svg", _external=True
+        ),
+    }
+
+    xml = rss.build_feed(uid, channel, items)
+
+    resp = Response(xml, mimetype="application/rss+xml; charset=utf-8")
+    resp.headers["Cache-Control"] = "public, max-age=300"  # Cache for 5 minutes
+    return resp
 
 
 @bp.get("/_health/firestore")
@@ -106,17 +139,21 @@ def firestore_health_check():
     try:
         db = current_app.config.get("FIRESTORE_DB")
         if db is None:
-            return {
-                "status": "error",
-                "message": "Firestore client not found in app config",
-            }, 500
+            return (
+                {
+                    "status": "error",
+                    "message": "Firestore client not found in app config",
+                },
+                500,
+            )
         # Attempt a simple operation to confirm connectivity
-        # This assumes you have a collection named 'health_check' and a document 'test'
-        # You might need to create these manually in the emulator UI if they don't exist
         db.collection("health_check").document("test").get()
-        return {
-            "status": "ok",
-            "message": "Firestore client initialized and connected",
-        }, 200
+        return (
+            {
+                "status": "ok",
+                "message": "Firestore client initialized and connected",
+            },
+            200,
+        )
     except Exception as e:
         return {"status": "error", "message": f"Firestore connection failed: {e}"}, 500

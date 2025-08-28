@@ -73,7 +73,7 @@ jobs:
               TTS_PITCH=0.0,
               TASKS_QUEUE=$TASKS_QUEUE_VAL,
               TASKS_LOCATION=$REGION,
-              FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT }},
+              FIREBASE_PROJECT_ID=storyspool-be776,
               ADMIN_UIDS=${{ secrets.ADMIN_UIDS }} \
             --set-secrets=
               TASK_TOKEN=TASK_TOKEN:latest,

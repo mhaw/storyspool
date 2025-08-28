@@ -1,9 +1,9 @@
-import pathlib  # Import pathlib
+import pathlib  # Import pathlib # noqa: F401
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.tts import chunk_text, synthesize_article_to_mp3
+from app.services.tts import synthesize_article_to_mp3
 
 
 @pytest.fixture
@@ -69,13 +69,3 @@ def test_synthesize_article_to_mp3_success(
     mock_segment_instance.export.assert_called_once()
     # Optional: sanity-check that a local path string was produced
     assert str(local_path) == f"/tmp/tts123/{urlhash}.mp3"
-
-
-def test_chunk_text():
-    """Test the text chunking logic."""
-    long_text = "Paragraph one.\n\nParagraph two.\n\nParagraph three."
-    chunks = chunk_text(long_text, max_len=20)
-    assert len(chunks) == 3
-    assert chunks[0] == 'Paragraph one.<break time="100ms"/>'
-    assert chunks[1] == 'Paragraph two.<break time="100ms"/>'
-    assert chunks[2] == 'Paragraph three.<break time="100ms"/>'

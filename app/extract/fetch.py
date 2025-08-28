@@ -1,12 +1,9 @@
-import asyncio
-
 import httpx
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from app.extract.errors import (
     ContentTypeError,
-    ExtractionError,
     HTTPError,
     NetworkError,
 )

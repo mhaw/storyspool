@@ -5,11 +5,9 @@ import logging
 import os
 import shutil  # For cleaning up temp directories
 import sys
-import tempfile
 from unittest.mock import patch  # Import patch
 
 from app import create_app
-from app.services import tts as tts_service  # Import tts module to patch its members
 from app.services.tts import synthesize_article_to_mp3
 
 # Configure logging

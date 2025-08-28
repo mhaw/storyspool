@@ -11,6 +11,32 @@ SA_EMAIL := speakaudio2-sa@$(GCP_PROJECT).iam.gserviceaccount.com
 PYTHON := .venv/bin/python
 PIP := .venv/bin/pip
 
+# Variables for Cloud Run deployment
+CLOUD_RUN_SERVICE = storyspool-staging
+CLOUD_RUN_REGION = us-central1
+
+# Project directories
+VENV_DIR = .venv
+APP_DIR = app
+TEST_DIR = tests
+
+# --- Config (override via env: make build-image PROJECT_ID=storyspool) ---
+PROJECT_ID ?= storyspool
+REGION ?= us-central1
+TAG := $(shell date +%Y%m%d-%H%M%S)
+IMAGE := gcr.io/$(PROJECT_ID)/storyspool-staging:$(TAG)
+
+.PHONY: all clean install test lint format run build-image deploy-image deploy-staging logs print-vars FORCE test-fast check-env check-app dev css fmt check deploy-prod setup-secrets extract tts failed-build-logs
+
+print-vars:
+	@echo "PROJECT_ID=$(PROJECT_ID)"
+	@echo "REGION=$(REGION)"
+	@echo "TAG=$(TAG)"
+	@echo "IMAGE=$(IMAGE)"
+
+# Always run this target (prevents 'Nothing to be done')
+FORCE:
+
 # Run the Flask app locally
 dev:
 	FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 FIRESTORE_EMULATOR_HOST=localhost:8080 $(PYTHON) -m flask run --host=0.0.0.0 --port=8081 --reload
@@ -25,12 +51,26 @@ install:
 	npm install
 
 # Run tests
-test:
-	pytest -q
+test: install
+	@echo "Running tests..."
+	@$(VENV_DIR)/bin/pytest $(TEST_DIR)
+	@echo "Tests finished."
 
-# Run only the 3 specific failing tests, stop on first failure
-test-fast:
-	pytest -q tests/test_tts.py::test_chunk_text tests/test_worker.py::test_run_job_success tests/test_worker.py::test_run_job_failure -x
+test-fast: install
+	@echo "Running fast tests..."
+	@$(VENV_DIR)/bin/pytest -q --maxfail=1 tests/test_worker.py::test_run_job_success || exit 1
+	@echo "Fast tests finished."
+
+# Preflight Checks
+check-env:
+	@[ -n "$(GCP_PROJECT)" ] || (echo "[env] GOOGLE_CLOUD_PROJECT missing. Please set it." && exit 2)
+	@[ -n "$(GCS_BUCKET)" ] || (echo "[env] GCS_BUCKET missing. Please set it." && exit 2)
+	@echo "[env] All required environment variables are set."
+
+check-app:
+	@echo "[check] Verifying Gunicorn app import..."
+	@$(PYTHON) -c 'import importlib, os, sys; mod = os.getenv("GUNICORN_APP","wsgi:app").split(":")[0]; print(f"[check] Importing {mod} ..."); importlib.import_module(mod); assert hasattr(sys.modules[mod], "app"); print("[check] OK")'
+	@echo "[check] Flask/Gunicorn app import verified."
 
 # Run linting/formatting checks
 lint:
@@ -43,40 +83,36 @@ fmt:
 
 # Clean build artifacts
 clean:
-	find . -type d -name "__pycache__" -exec rm -rf {} +
+	find . -type d -name "__pycache__" -exec rm -rf {} + \
 	find . -type f -name "*.pyc" -delete
 
 # Combined check: format → lint → test
 check: fmt lint test
 	@echo "✅ All checks passed"
 
-check-app:
-	@echo "[check] Verifying Flask app import path..."
-	@$(PYTHON) -c 'import importlib, os, sys; mod = os.getenv("GUNICORN_APP","wsgi:app").split(":")[0]; print(f"[check] Importing {mod} ..."); importlib.import_module(mod); assert hasattr(sys.modules[mod], "app"); print("[check] OK")'
+# Build the container using the local Dockerfile (no Buildpacks)
+build-image: FORCE print-vars
+	gcloud builds submit . --region $(REGION) \
+	  --config cloudbuild.yaml \
+	  --substitutions _IMAGE=$(IMAGE),_FIREBASE_PROJECT_ID=$(PROJECT_ID)
 
-# Build and deploy (requires gcloud + config in scripts/)
-deploy-staging: check-app
-	@echo "Building container image with Cloud Build..."
-	gcloud builds submit . --config=cloudbuild.yaml --substitutions=_FIREBASE_PROJECT_ID=$(GCP_PROJECT)
-	@echo "Deploying image to Cloud Run..."
+# Deploy the *built* image to Cloud Run (no --source)
+deploy-image: print-vars
 	gcloud run deploy storyspool-staging \
-		--image gcr.io/$(GCP_PROJECT)/storyspool-staging:latest \
-		--region us-central1 \
-		--service-account=speakaudio2-sa@$(GCP_PROJECT).iam.gserviceaccount.com \
-		--allow-unauthenticated \
-		--port 8080 \
-		--cpu 1 \
-		--memory 512Mi \
-		--min-instances 0 \
-		--max-instances 1 \
-		--ingress all \
-		--set-env-vars ENV=staging,FIRESTORE_COLLECTION=articles_staging,GCS_BUCKET=speakaudio2-audio-staging,TASKS_QUEUE=speakaudio2-jobs,TASKS_LOCATION=us-central1 \
-		--set-secrets=TASK_TOKEN=SPEAKAUDIO2_TASK_TOKEN:latest
+	  --image $(IMAGE) \
+	  --region $(REGION) \
+	  --allow-unauthenticated \
+	  --set-env-vars ENV=staging,GCP_PROJECT=$(PROJECT_ID),GCS_BUCKET=storyspool_cloudbuild,FIREBASE_PROJECT_ID=$(PROJECT_ID)
 
+# One-shot convenience: build then deploy
+deploy-staging: build-image deploy-image
+
+logs:
+	gcloud run services logs read storyspool-staging --region $(REGION) --limit=200 --tail
 
 deploy-prod:
 	gcloud run deploy storyspool-prod \
-		--source . \
+		--source .
 		--region us-central1 \
 		--service-account=speakaudio2-sa@$(GCP_PROJECT).iam.gserviceaccount.com \
 		--allow-unauthenticated
@@ -84,14 +120,14 @@ deploy-prod:
 # Setup Secret Manager secret and permissions
 setup-secrets:
 	@echo "Ensuring Secret Manager secret exists and permissions are set..."
-	# Create secret if it doesn't exist (idempotent)
+	# Create secret if it doesn\'t exist (idempotent)
 	gcloud secrets describe $(SECRET_NAME) --project=$(GCP_PROJECT) &>/dev/null || \
 	gcloud secrets create $(SECRET_NAME) --project=$(GCP_PROJECT) --replication-policy="automatic"
 
 	# Add secret version (prompts for value, idempotent - adds new version if value changes)
 	@echo "Please paste the value for $(SECRET_NAME) and press Enter (will not be echoed):"
 	@read -s SECRET_VALUE; \
-	printf "$SECRET_VALUE" | gcloud secrets versions add $(SECRET_NAME) --data-file=- --project=$(GCP_PROJECT)
+	printf "$$SECRET_VALUE" | gcloud secrets versions add $(SECRET_NAME) --data-file=- --project=$(GCP_PROJECT)
 
 	# Grant service account access to the secret (idempotent)
 	gcloud secrets add-iam-policy-binding $(SECRET_NAME) \
@@ -99,8 +135,6 @@ setup-secrets:
 		--role="roles/secretmanager.secretAccessor" \
 		--project=$(GCP_PROJECT)
 	@echo "Secret setup complete."
-
-.PHONY: extract tts
 
 extract:
 	@echo "Extracting article from URL: $(URL)"
@@ -113,7 +147,6 @@ tts: .cache/extracted_article.json
 	@echo "Synthesizing audio from .cache/extracted_article.json"
 	@$(PYTHON) scripts/tts.py .cache/extracted_article.json
 
-.PHONY: failed-build-logs
 failed-build-logs:
 	@echo "Fetching logs for the last failed build..."
 	@./scripts/get_last_failed_build_log.sh

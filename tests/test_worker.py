@@ -82,11 +82,15 @@ def test_run_job_failure(mock_extract, mock_update_job, mock_get_job, mock_app_c
     """Test the failure path of run_job."""
     # Arrange: Set up mocks for a failure scenario
     job_id = "test_job_fail"
-    mock_get_job.return_value = {
-        "id": job_id,
-        "url": "http://example.com/broken-article",
-        "status": "queued",
-    }
+    # Simulate the job status being 'fetching' when the error occurs
+    mock_get_job.side_effect = [
+        {
+            "id": job_id,
+            "url": "http://example.com/broken-article",
+            "status": "queued",
+        },
+        {"status": "fetching"},  # Mock the status check inside the except block
+    ]
     # Simulate the extraction failing
     exception_message = "Extraction failed miserably"
     mock_extract.side_effect = Exception(exception_message)
@@ -98,7 +102,7 @@ def test_run_job_failure(mock_extract, mock_update_job, mock_get_job, mock_app_c
     assert success is False
     assert message == exception_message
 
-    # Check that the job status was updated to running, then to error
+    # Check that the job status was updated to fetching, then to the correct failed status
     assert mock_update_job.call_count == 2
     mock_update_job.assert_any_call(job_id, status="fetching")
     mock_update_job.assert_any_call(
