@@ -1,36 +1,19 @@
 FROM python:3.12-slim AS build
 WORKDIR /app
 
-# Create sources.list for apt-get
-RUN echo "deb http://deb.debian.org/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
-    echo "deb http://deb.debian.org/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list && \
-    echo "deb http://deb.debian.org/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list
-
+# Enable non-free repository for fonts-ubuntu
+RUN sed -i 's/main/main contrib non-free/' /etc/apt/sources.list.d/debian.sources
 # Install system-level dependencies that rarely change
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    nodejs \
-    npm \
-    ffmpeg \
-    git \
-    libsndfile1 \
-    jq \
-    fonts-unifont \
-    fonts-ubuntu \
-    fonts-noto \
-    fonts-noto-color-emoji \
-    fonts-noto-pdf \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends     build-essential     curl     nodejs     npm     ffmpeg     git     libsndfile1     jq     fonts-noto     fonts-noto-color-emoji     fonts-noto-pdf     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first to leverage caching
 # This layer only rebuilds if requirements.txt changes
-COPY requirements.txt ./
+COPY requirements.txt ./ 
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Node.js dependencies, generating the Data Connect SDK first
-COPY package.json package-lock.json ./
-COPY .firebaserc ./
+COPY package.json package-lock.json ./ 
+COPY .firebaserc ./ 
 ARG FIREBASE_PROJECT_ID
 
 RUN test -n "$FIREBASE_PROJECT_ID" || (echo "Build failed: FIREBASE_PROJECT_ID is not set." && exit 1)
@@ -38,8 +21,7 @@ RUN npm cache clean --force # Clear npm cache to ensure fresh install
 RUN npm install -g firebase-tools@latest # Pin firebase-tools version
 RUN firebase --version # Debugging firebase-tools version
 RUN firebase dataconnect:sdk:generate --project="$FIREBASE_PROJECT_ID"
-RUN mkdir -p dataconnect-generated/js/default-connector && \
-    echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
+RUN mkdir -p dataconnect-generated/js/default-connector &&     echo '{"name": "@firebasegen/default-connector", "version": "1.0.0", "main": "index.cjs.js"}' > dataconnect-generated/js/default-connector/package.json
 RUN npm ci && npm rebuild
 
 # Install Playwright browsers ( Pafter npm ci/rebuild for better caching)
@@ -57,14 +39,7 @@ FROM python:3.12-slim AS final
 WORKDIR /app
 
 # Install only necessary runtime system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
-    libsndfile1 \
-    poppler-utils \
-    libnss3 \
-    libfontconfig1 \
-    libgbm1 \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends     ffmpeg     libsndfile1     poppler-utils     libnss3     libfontconfig1     libgbm1     && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user
 RUN adduser --system --group appuser
