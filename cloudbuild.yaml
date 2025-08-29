@@ -2,7 +2,9 @@
 # and an optional _FIREBASE_PROJECT_ID used as a build-arg.
 
 substitutions:
-  _IMAGE: 'gcr.io/$PROJECT_ID/storyspool-staging:dev'
+  # Default to Artifact Registry in multi-region 'us'
+  # Overridden by Makefile via --substitutions
+  _IMAGE: 'us-docker.pkg.dev/$PROJECT_ID/storyspool-staging/storyspool-staging:dev'
   _FIREBASE_PROJECT_ID: 'storyspool-be776'
 
 steps:

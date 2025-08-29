@@ -20,17 +20,23 @@ VENV_DIR = .venv
 APP_DIR = app
 TEST_DIR = tests
 
-# --- Config (override via env: make build-image PROJECT_ID=storyspool) ---
+# --- Config (override via env: make build-image PROJECT_ID=storyspool-be776) ---
 PROJECT_ID ?= storyspool-be776
 REGION ?= us-central1
+# Artifact Registry location and repo (AR is recommended over Container Registry)
+AR_LOCATION ?= us
+AR_REPO ?= storyspool-staging
 TAG := $(shell date +%Y%m%d-%H%M%S)
-IMAGE := gcr.io/$(PROJECT_ID)/storyspool-staging:$(TAG)
+# Artifact Registry image path: <location>-docker.pkg.dev/<project>/<repo>/<image>:<tag>
+IMAGE := $(AR_LOCATION)-docker.pkg.dev/$(PROJECT_ID)/$(AR_REPO)/storyspool-staging:$(TAG)
 
 .PHONY: all clean install test lint format run build-image deploy-image deploy-staging logs print-vars FORCE test-fast check-env check-app dev css fmt check deploy-prod setup-secrets extract tts failed-build-logs
 
 print-vars:
 	@echo "PROJECT_ID=$(PROJECT_ID)"
 	@echo "REGION=$(REGION)"
+	@echo "AR_LOCATION=$(AR_LOCATION)"
+	@echo "AR_REPO=$(AR_REPO)"
 	@echo "TAG=$(TAG)"
 	@echo "IMAGE=$(IMAGE)"
 

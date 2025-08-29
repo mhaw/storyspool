@@ -20,5 +20,11 @@
 - The root route `/` now shows a landing page for anonymous users and redirects to `/articles` for authenticated users.
 
 ### Fixed
+- **Test Suite**: Fixed multiple issues in the test suite, including a `ValueError` related to Firebase app initialization and several `AttributeError` and `AssertionError` exceptions in the routes tests.
+- **Firestore Rules**: Updated Firestore security rules to require authentication for all read and write operations.
+- **IAM Permissions**: Replaced the `roles/storage.objectAdmin` role with the more restrictive `roles/storage.objectCreator` and `roles/storage.objectViewer` roles in the `gcp_bootstrap.sh` script.
+- **Configuration**: Replaced the hardcoded project ID in `.firebaserc` with a placeholder to allow for dynamic configuration.
+
+### Fixed
 - Corrected the feed title generation in `app/routes.py` to match test assertions.
 - Added `GCS_BUCKET_NAME` to the test configuration to prevent `KeyError` during integration tests.

@@ -1,5 +1,5 @@
 {
   "projects": {
-    "default": "storyspool-be776"
+    "default": "${GCP_PROJECT_ID}"
   }
 }
