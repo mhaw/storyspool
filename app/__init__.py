@@ -86,4 +86,9 @@ def create_app():
     def healthz():
         return {"status": "ok"}, 200
 
+    @app.after_request
+    def add_security_headers(response):
+        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+        return response
+
     return app

@@ -21,7 +21,7 @@ APP_DIR = app
 TEST_DIR = tests
 
 # --- Config (override via env: make build-image PROJECT_ID=storyspool) ---
-PROJECT_ID ?= storyspool
+PROJECT_ID ?= storyspool-be776
 REGION ?= us-central1
 TAG := $(shell date +%Y%m%d-%H%M%S)
 IMAGE := gcr.io/$(PROJECT_ID)/storyspool-staging:$(TAG)
