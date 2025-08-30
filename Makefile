@@ -96,22 +96,7 @@ clean:
 check: fmt lint test
 	@echo "✅ All checks passed"
 
-# Build the container using the local Dockerfile (no Buildpacks)
-build-image: FORCE print-vars
-	gcloud builds submit . --region $(REGION) \
-	  --config cloudbuild.yaml \
-	  --substitutions _IMAGE=$(IMAGE),_FIREBASE_PROJECT_ID=$(PROJECT_ID)
 
-# Deploy the *built* image to Cloud Run (no --source)
-deploy-image: print-vars
-	gcloud run deploy storyspool-staging \
-	  --image $(IMAGE) \
-	  --region $(REGION) \
-	  --allow-unauthenticated \
-	  --set-env-vars ENV=staging,GCP_PROJECT=$(PROJECT_ID),GCS_BUCKET=storyspool_cloudbuild,FIREBASE_PROJECT_ID=$(PROJECT_ID)
-
-# One-shot convenience: build then deploy
-deploy-staging: build-image deploy-image
 
 logs:
 	gcloud run services logs read storyspool-staging --region $(REGION) --limit=200 --tail
