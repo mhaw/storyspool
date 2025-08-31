@@ -1,5 +1,12 @@
 # Changelog
 
+### Unreleased — Deployment stabilization
+- Canonicalized Dockerfile (renamed Dockerfile.ctx → Dockerfile; removed legacy Dockerfile).
+- Standardized project ID to `storyspool` across .firebaserc, .env.example, and code.
+- Stopped DataConnect codegen during Docker build; committed/used generated SDK if present.
+- Hardened Tailwind/JS build to be optional and reproducible.
+- Firebase Admin initialization uses ADC on Cloud Run with env fallback.
+
 ## [Unreleased]
 
 - chore(ci): replace `ci.yml` and `deploy.yml` with a single `ci-cd.yml`
@@ -36,3 +43,10 @@
 ### Fixed
 - Corrected the feed title generation in `app/routes.py` to match test assertions.
 - Added `GCS_BUCKET_NAME` to the test configuration to prevent `KeyError` during integration tests.
+
+## [Unreleased]
+### Fixed
+- Unblocked container startup by using ADC (Option B) and reverting Firebase Admin init to Application Default credentials.
+
+### Ops
+- Documented local run with `GOOGLE_APPLICATION_CREDENTIALS` mount and explicit `GOOGLE_CLOUD_PROJECT`.
