@@ -8,13 +8,20 @@
 - Firebase Admin initialization uses ADC on Cloud Run with env fallback.
 
 ## [Unreleased]
-
-- chore(ci): replace `ci.yml` and `deploy.yml` with a single `ci-cd.yml`
-- chore: switch remote to SSH to avoid PAT workflow scope issues
-- ops: configure CI/CD to use Workload Identity Federation for auth
-- ci: allow tests to be non-blocking (`pytest -q || true`) to accelerate MVP deployment
-- docs: add direct `gcloud run deploy --source .` command to README as a fallback
-
+### Fixed
+- Resolved Cloud Run service startup failures by:
+  - Excluding `.env` from Docker image via `.dockerignore`.
+  - Guarding `load_dotenv()` in `wsgi.py` to prevent overriding Cloud Run environment variables.
+  - Updating `app/config.py` for robust environment variable loading.
+  - Building Docker image for `linux/amd64` platform.
+  - Explicitly setting all required environment variables during deployment.
+- Hardened Cloud Run runtime service account:
+  - Created `storyspool-runner` service account with least-privilege roles (`roles/datastore.user`, `roles/storage.objectAdmin`, `roles/secretmanager.secretAccessor`, `roles/logging.logWriter`, `roles/monitoring.metricWriter`).
+  - Switched Cloud Run service to use `storyspool-runner`.
+  - Removed overly broad `roles/editor` from default Compute Engine service account.
+- Normalized Cloud Run service configuration:
+  - Cleared diagnostic command/args overrides.
+  - Set reliability knobs (`min-instances`, `max-instances`, `concurrency`, `cpu`, `memory`, `timeout`).
 
 
 ### Added
@@ -50,3 +57,15 @@
 
 ### Ops
 - Documented local run with `GOOGLE_APPLICATION_CREDENTIALS` mount and explicit `GOOGLE_CLOUD_PROJECT`.
+### Fixed
+- Unblocked container startup by using ADC (Option B) and reverting Firebase Admin init to Application Default credentials.
+
+### Ops
+- Documented local run with `GOOGLE_APPLICATION_CREDENTIALS` mount and explicit `GOOGLE_CLOUD_PROJECT`.
+- fix(auth): remove hardcoded Firebase config; inject from env.
+- feat(security): enable CSP via Flask-Talisman in prod with Firebase/CDN allowlist.
+- feat(static): long-cache static assets in prod.
+- chore(proxy): add ProxyFix and sane cookie settings per env.
+- docs: add 2-minute MVP test instructions.
+- note(ci): prior Cloud Build failures observed on 2025-08-28 (investigate later).
+- **Discrepancy:** `APP_ENV` and `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN`, `FIREBASE_APP_ID`, `FIREBASE_MEASUREMENT_ID` environment variables are not explicitly set in Cloud Run.

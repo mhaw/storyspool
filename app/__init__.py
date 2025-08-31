@@ -1,94 +1,75 @@
-import datetime  # Import datetime
 import logging
-from urllib.parse import urlparse  # Import urlparse
 
-from flask import Flask
-from pythonjsonlogger import jsonlogger
+from flask import Flask, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-from .config import load_config
-from .extensions import init_extensions
-from .firebase_admin_ext import init_firebase_admin  # New import
-from .routes import bp as main_bp
-
-# Removed: from firebase_admin import initialize_app # Moved to firebase_admin_ext
-
-
-def urlparse_filter(value):
-    """Jinja2 filter to parse URLs."""
-    return urlparse(value)
-
-
-def timeago_filter(dt):
-    """Jinja2 filter to format datetime as 'time ago'."""
-    now = datetime.datetime.now(datetime.timezone.utc)  # Ensure timezone awareness
-    if dt.tzinfo is None:  # Assume UTC if no timezone info
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
-
-    diff = now - dt
-
-    seconds = diff.total_seconds()
-    if seconds < 60:
-        return f"{int(seconds)} seconds ago"
-    minutes = seconds / 60
-    if minutes < 60:
-        return f"{int(minutes)} minutes ago"
-    hours = minutes / 60
-    if hours < 24:
-        return f"{int(hours)} hours ago"
-    days = hours / 24
-    if days < 30:
-        return f"{int(days)} days ago"
-    months = days / 30
-    if months < 12:
-        return f"{int(months)} months ago"
-    years = days / 365
-    return f"{int(years)} years ago" ""
+try:
+    from flask_talisman import Talisman
+except Exception:  # talisman optional in local
+    Talisman = None
+from .config import Config
 
 
 def create_app():
-    app = Flask(__name__, static_folder="static", template_folder="templates")
-    load_config(app)
+    app = Flask(__name__, static_folder="static", static_url_path="/static")
+    app.config.from_object(Config)
 
-    # Set logging level to DEBUG for development
-    app.logger.setLevel(logging.DEBUG)
+    # Reverse-proxy aware headers (Cloud Run)
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
-    # Configure JSON logging for production
-    if app.config.get("USE_STRUCTURED_LOGGING"):
-        handler = logging.StreamHandler()
-        formatter = jsonlogger.JsonFormatter(
-            "%(levelname)s %(asctime)s %(filename)s %(lineno)d %(message)s"
+    # Minimal CSP for Firebase + fonts (only in prod if Talisman available)
+    if Talisman and app.config["APP_ENV"] == "prod":
+        csp = {
+            "default-src": ["'self'"],
+            "style-src": ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
+            "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+            "script-src": [
+                "'self'",
+                "https://www.gstatic.com",
+                "https://www.googletagmanager.com",
+                "https://apis.google.com",
+            ],
+            "connect-src": [
+                "'self'",
+                "https://firestore.googleapis.com",
+                "https://www.googleapis.com",
+                "https://securetoken.googleapis.com",
+                "https://identitytoolkit.googleapis.com",
+            ],
+            "img-src": ["'self'", "data:"],
+            "frame-src": ["'self'", "https://accounts.google.com"],
+        }
+        Talisman(
+            app,
+            content_security_policy=csp,
+            force_https=(app.config["PREFERRED_URL_SCHEME"] == "https"),
         )
-        handler.setFormatter(formatter)
-        app.logger.addHandler(handler)
-        app.logger.info("Using structured JSON logging.")
-    else:
-        # Default Flask logger is already configured for console output
-        app.logger.info("Using basic console logging.")
 
-    # Initialize Firebase Admin SDK and Firestore client
-    # This will also log the resolved FIREBASE_PROJECT_ID and emulator status
-    app.config["FIRESTORE_DB"] = init_firebase_admin(app.config, app.logger)
-
-    init_extensions(app)
-
-    # Register custom Jinja2 filters
-    app.jinja_env.filters["urlparse"] = urlparse_filter
-    app.jinja_env.filters["timeago"] = timeago_filter  # Register timeago filter
-
+    # Expose Firebase Web config to templates
     @app.context_processor
-    def inject_global_vars():
-        return dict(cache_buster=datetime.datetime.now().timestamp())
+    def inject_web_config():
+        return {"FIREBASE_WEB_CONFIG": app.config["FIREBASE"]}
 
-    # Blueprints
-    app.register_blueprint(main_bp)
-
-    @app.get("/healthz")
-    def healthz():
-        return {"status": "ok"}, 200
-
+    # Add long cache headers for static in prod
     @app.after_request
-    def add_security_headers(response):
-        response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
-        return response
+    def add_cache_headers(resp):
+        try:
+            if app.config["APP_ENV"] == "prod" and request.path.startswith("/static/"):
+                resp.headers["Cache-Control"] = (
+                    f"public, max-age={app.config['SEND_FILE_MAX_AGE_DEFAULT']}"
+                )
+        except Exception:
+            pass
+        return resp
 
+    # Boot log: resolved environment & public URL
+    logging.getLogger().setLevel(logging.INFO)
+    app.logger.info(
+        {
+            "event": "boot_config",
+            "APP_ENV": app.config["APP_ENV"],
+            "PUBLIC_BASE_URL": app.config.get("PUBLIC_BASE_URL"),
+            "FIREBASE_projectId": app.config["FIREBASE"].get("projectId"),
+        }
+    )
     return app

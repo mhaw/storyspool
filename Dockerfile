@@ -16,7 +16,9 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # App code
+# Force rebuild of app code layer
 COPY . .
+RUN ls -lR /app
 
 # (Optional) Tailwind build is skipped for now; you already ship compiled CSS in app/static/css
 # Add it back later if needed with a guarded step.

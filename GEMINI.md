@@ -191,3 +191,119 @@ FIREBASE_AUTH_EMULATOR_HOST=localhost:9099
 # or:
 GOOGLE_APPLICATION_CREDENTIALS=/secrets/adc.json
 PORT=8081
+Got it — I’ll update your GEMINI.md to reflect the recent lessons learned, the current state of your Cloud Run setup, and workflow needs. This version keeps the existing playbook structure but integrates the fixes around .env, PORT handling, service accounts, and your MVP-first approach.
+
+⸻
+
+
+# Gemini CLI Playbook
+
+## Diagnose & Patch Template
+Act as a senior Flask/GCP engineer on StorySpool.
+Read: docs/ARCHITECTURE.md, app/services/tts.py, app/worker.py.
+Task: <describe>
+Output:
+1. Exact shell commands to diagnose
+2. A single unified diff (patch)
+3. How to verify locally + in Cloud Run
+
+Constraints: keep changes minimal; add logging at network boundaries.
+**Lesson learned**: avoid introducing new complexity unless it unblocks MVP. When in doubt, favor visibility (logs, health endpoints) over premature optimizations.
+
+---
+
+## Gemini Added Memories
+- The user wants to add test account login instructions to the README.md file. Ask for test account credentials before editing.
+- **Priority**: get the project working, even if it means disabling features or acknowledging failing tests. Keep testing infra (Makefile, pyproject.toml) even if tests are red.
+- Playwright install is fragile; recommend Docker for dev or clear install docs.
+- Flask-Talisman enforces HTTPS → causes local issues; disable or bypass in dev.
+- **Critical lesson**: `.env` files in Cloud Run images can override Cloud Run’s injected vars (e.g., PORT, FIREBASE_PROJECT_ID). Must add `.env` to `.dockerignore` and guard `load_dotenv()` in `wsgi.py` with `if not os.getenv("K_SERVICE")` and `override=False`.
+- Cloud Run forces `PORT=8080`. Do not set your own PORT in `.env` or Dockerfile. Always bind Gunicorn to `$PORT`.
+- The runtime service account must not be left with `roles/editor`. We created `storyspool-runner@storyspool.iam.gserviceaccount.com` with only:
+  - roles/datastore.user
+  - roles/storage.objectAdmin (downgrade to Viewer if read-only)
+  - roles/secretmanager.secretAccessor
+  - roles/logging.logWriter
+  - roles/monitoring.metricWriter
+- **Ops lesson**: `--set-env-vars` wipes all envs (including PORT). Use `--update-env-vars` and `--update-secrets` to avoid clobbering Cloud Run’s defaults.
+- Observability: rely on `/health`, `docker logs`, and `gcloud beta run services logs tail`. Empty logs usually mean Gunicorn isn’t writing → fix with explicit `GUNICORN_CMD_ARGS`.
+
+---
+
+## Gemini CLI Instructions (MVP Speed)
+
+### 1) Fastest path to `/health` green
+ROLE: Pragmatic DevOps focused on MVP.
+CONTEXT:
+- App: StorySpool (Flask + Gunicorn; Firebase Auth + Firestore; optional GCS).
+- Observed: PORT conflicts and .env overrides caused 504s in Cloud Run.
+- Current fix: `.env` excluded from Docker build; `load_dotenv()` guarded; Gunicorn bound to Cloud Run’s injected PORT.
+MISSION:
+- Always prefer the shortest path to a `200 OK` from `/health`.
+- Default: use emulators (fast). Fallback: ADC mount.
+
+DELIVERABLES:
+1. State chosen path (A=emulators, B=real creds).
+2. Output `docker run` command with required envs + Gunicorn args.
+3. Verification: `curl -i http://localhost:8081/health`.
+4. Optional fallback to ADC.
+5. Max three “fix later” items.
+
+Constraints: no new files, no best-practice detours.
+
+---
+
+### 2) If `/health` still stuck → inspect quickly
+ROLE: Triage engineer.
+GOAL: Identify stuck healthcheck in under 60s.
+Use `docker inspect …`, `docker events …`, and probe inside the container.
+Expected: `.State.Health.Status=healthy` or logs revealing init failure.
+
+---
+
+### 3) Make HEALTHCHECK self-contained
+ROLE: Container surgeon.
+Replace curl/wget HEALTHCHECK with stdlib Python probe.
+Append to Dockerfile:
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD python - <<'PY' || exit 1
+import urllib.request, sys
+try:
+    with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=3) as r:
+        sys.exit(0 if r.status == 200 else 1)
+except Exception:
+    sys.exit(1)
+PY
+
+
+⸻
+
+4) Force Gunicorn to log
+
+ROLE: Runtime fixer.
+Always run with:
+
+-e GUNICORN_CMD_ARGS="--bind 0.0.0.0:$PORT --workers 1 --threads 4 \
+  --timeout 60 --graceful-timeout 30 \
+  --access-logfile - --error-logfile - --log-level debug"
+
+So docker logs or Cloud Run logs aren’t empty.
+
+⸻
+
+5) One-liner fallback to real creds
+
+ROLE: Expedite MVP when emulators are down.
+Mount ADC from $HOME/.config/gcloud/application_default_credentials.json at /secrets/adc.json and set GOOGLE_APPLICATION_CREDENTIALS.
+
+⸻
+
+6) Post-success doc touch
+
+ROLE: Minimal doc update.
+	•	Append to CHANGELOG.md: note fix of PORT/.env conflict, move to ADC, runtime SA hardening.
+	•	Keep .env.example with only required keys (never include PORT).
+	•	Document local run both with emulators and with ADC fallback.
+
+⸻
