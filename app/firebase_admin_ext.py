@@ -25,3 +25,9 @@ def init_firebase():
 
 
 db = init_firebase()
+
+
+# Compatibility shim for old import name, as requested.
+def init_firebase_admin(*_args, **_kwargs):
+    """Compat: some callers pass (config, logger). We ignore and init via ADC."""
+    return init_firebase()

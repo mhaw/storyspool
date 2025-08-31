@@ -1,0 +1,3 @@
+[worker.oci]
+gc = true
+gckeepstorage = 20GB
