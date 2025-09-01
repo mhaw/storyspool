@@ -101,9 +101,21 @@ check: fmt lint test
 logs:
 	gcloud run services logs read storyspool-staging --region $(REGION) --limit=200 --tail
 
+build-image:
+	gcloud builds submit --config cloudbuild.yaml \
+		--substitutions=_IMAGE=$(IMAGE),_FIREBASE_PROJECT_ID=$(PROJECT_ID) .
+	@echo "Docker image built: $(IMAGE)"
+
+deploy-staging: build-image
+	gcloud run deploy $(CLOUD_RUN_SERVICE) \
+		--image $(IMAGE) \
+		--region $(CLOUD_RUN_REGION) \
+		--allow-unauthenticated # Assuming staging is publicly accessible for testing
+	@echo "Staging deployment complete. Service: $(CLOUD_RUN_SERVICE), Region: $(CLOUD_RUN_REGION)"
+
 deploy-prod:
 	gcloud run deploy storyspool-prod \
-		--source .
+		--source . \
 		--region us-central1 \
 		--service-account=speakaudio2-sa@$(GCP_PROJECT).iam.gserviceaccount.com \
 		--allow-unauthenticated

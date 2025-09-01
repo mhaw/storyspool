@@ -1,6 +1,6 @@
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from flask import url_for
 
 
@@ -28,10 +28,11 @@ def test_index_anonymous(mock_current_user_id, client):
     assert b"Sign In / Get Started" in response.data
 
 
-@patch("app.routes.current_user_id")
-def test_index_authenticated(mock_current_user_id, client):
+@patch("app.routes.current_user_id")  # Patch current_user_id here
+def test_index_authenticated(mock_current_user_id, client):  # Removed app fixture
     """Test the index page for an authenticated user, should redirect."""
-    mock_current_user_id.return_value = "user123"
+    mock_current_user_id.return_value = "user123"  # Set return value for the mock
+    # Removed app.app_context() and app.config modification
     response = client.get("/")
     assert response.status_code == 302
     assert response.location == url_for("main.article_list", _external=False)

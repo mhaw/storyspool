@@ -1,0 +1,8 @@
+/* Minimal CSS so /static/app.css returns 200 */
+:root { --fg:#0a0a0a; --bg:#fff; }
+ @media (prefers-color-scheme: dark){ :root { --fg:#fafafa; --bg:#121212; } }
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif}
+.container{max-width:720px;margin:3rem auto;padding:0 1rem}
+h1{font-size:1.6rem;margin:.25rem 0 0}
+p{opacity:.9}
+/* Dummy comment to force rebuild */

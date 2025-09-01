@@ -1,84 +1,80 @@
 import functools
-import os  # New import
 
 from firebase_admin import auth
-from flask import abort, current_app, g, request  # Import current_app
-
-
-def _bearer_token():
-    hdr = request.headers.get("Authorization", "")
-    if hdr.lower().startswith("bearer "):
-        token = hdr.split(" ", 1)[1].strip()
-        current_app.logger.debug(
-            f"Found Bearer token in Authorization header: {token[:10]}..."
-        )  # Log first 10 chars
-        return token
-    token = request.cookies.get("id_token")
-    if token:
-        current_app.logger.debug(
-            f"Found id_token in cookie: {token[:10]}..."
-        )  # Log first 10 chars
-    else:
-        current_app.logger.debug("No token found in Authorization header or cookie.")
-    return token
-
-
-def current_user():
-    tok = _bearer_token()
-    if not tok:
-        current_app.logger.debug("current_user: No token provided, returning None.")
-        return None
-    try:
-        decoded = auth.verify_id_token(tok, check_revoked=False)
-        uid = decoded.get("uid")
-        email = decoded.get("email")
-
-        # Check audience claim if not in emulator mode
-        firebase_project_id = current_app.config.get("FIREBASE_PROJECT_ID")
-        auth_emulator_host = os.getenv("FIREBASE_AUTH_EMULATOR_HOST")
-
-        if firebase_project_id and decoded.get("aud") != firebase_project_id:
-            if not auth_emulator_host:  # Not in emulator mode, so strict check
-                current_app.logger.error(
-                    f"Token verification failed: Incorrect 'aud' claim. Expected '{firebase_project_id}' but got '{decoded.get('aud')}'."
-                )
-                return None
-            else:  # In emulator mode, be tolerant
-                current_app.logger.warning(
-                    f"Token 'aud' mismatch in emulator mode. Expected '{firebase_project_id}' but got '{decoded.get('aud')}'. Proceeding with caution."
-                )
-
-        current_app.logger.debug(f"Token verified for UID: {uid}, Email: {email}")
-        is_admin = uid in current_app.config["ADMIN_UIDS"]
-        return {"uid": uid, "email": email, "is_admin": is_admin}
-    except Exception as e:
-        # Log failures as one-liners, no stack unless debug is enabled.
-        log_level = (
-            current_app.logger.debug if current_app.debug else current_app.logger.error
-        )
-        log_level(f"Token verification failed: {e}")
-        return None
+from flask import abort, current_app, g, make_response, redirect, request, url_for
 
 
 def current_user_id():
-    u = current_user()
-    return u["uid"] if u else None
+    """Returns the current user's UID from Firebase Auth, or None."""
+    if hasattr(g, "user") and g.user:
+        return g.user["uid"]
+    return None
 
 
-def user_display_name(uid: str) -> str:
-    return f"User-{uid[:6]}"
+def require_login(f):
+    """Decorator to require a user to be logged in."""
 
+    @functools.wraps(f)
+    def decorated_function(*args, **kwargs):
+        if current_app.config.get("TESTING_BYPASS_AUTH"):  # Bypass auth for testing
+            g.user = {"uid": "test_user_id"}  # Set a dummy user for testing
+            return f(*args, **kwargs)
 
-def require_login(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        u = current_user()
-        if not u:
-            current_app.logger.warning(
-                "require_login: User not authenticated, aborting 401."
+        # 1. Check for Firebase session cookie
+        session_cookie = request.cookies.get(current_app.config["COOKIE_NAME"])
+        if session_cookie:
+            try:
+                decoded_token = auth.verify_session_cookie(
+                    session_cookie, check_revoked=True
+                )
+                g.user = decoded_token
+                current_app.logger.info(
+                    f"User {g.user['uid']} authenticated via session cookie."
+                )
+                return f(*args, **kwargs)
+            except Exception as e:
+                current_app.logger.warning(f"Session cookie verification failed: {e}")
+                # If session cookie is invalid, clear it and redirect
+                response = make_response(redirect(url_for("main.index")))
+                response.set_cookie(
+                    current_app.config["COOKIE_NAME"],
+                    "",
+                    max_age=0,
+                    httponly=True,
+                    secure=current_app.config["SESSION_COOKIE_SECURE"],
+                    samesite=current_app.config["SESSION_COOKIE_SAMESITE"],
+                )
+                return response
+        else:
+            current_app.logger.info(
+                "No valid session cookie found. Attempting ID token authentication."
             )
-            abort(401)
-        g.user = u
-        return fn(*args, **kwargs)
 
-    return wrapper
+        # 2. Fallback: Check for Firebase ID token in the Authorization header (for API calls)
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            id_token = auth_header.split("Bearer ")[1]
+            try:
+                decoded_token = auth.verify_id_token(id_token)
+                g.user = decoded_token
+                current_app.logger.info(
+                    f"User {g.user['uid']} authenticated via ID token."
+                )
+                return f(*args, **kwargs)
+            except Exception as e:
+                current_app.logger.warning(f"ID token verification failed: {e}")
+                abort(401)  # Unauthorized
+
+        # If neither session cookie nor ID token is valid
+        current_app.logger.warning(
+            "require_login: User not authenticated, aborting 401 or redirecting."
+        )
+        if (
+            request.accept_mimetypes.accept_html
+            and not request.accept_mimetypes.accept_json
+        ):
+            return redirect(url_for("main.index"))  # Redirect to login page
+        else:
+            abort(401)  # Unauthorized
+
+    return decorated_function

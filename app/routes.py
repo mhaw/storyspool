@@ -1,3 +1,5 @@
+import hashlib
+
 from flask import (
     Blueprint,
     Response,
@@ -12,9 +14,11 @@ from flask import (
 )
 
 from .services import rss
+from .services.extract import extract_article
 from .services.jobs import JobStatus, create_job, get_job, list_user_jobs, update_job
 from .services.queue import enqueue_worker
 from .services.security import validate_external_url
+from .services.store import save_article_record
 from .services.users import current_user_id, require_login
 from .worker import run_job
 
@@ -61,6 +65,38 @@ def create_ingest_job():
     enqueue_worker(doc["id"])
     flash("Job queued.")
     return jsonify({"job_id": doc["id"], "status": doc["status"]}), 202
+
+
+@bp.post("/submit_article")
+@require_login
+def submit_article():
+    url = request.form.get("article_url")
+    if not url:
+        flash("Please provide an article URL.", "error")
+        return redirect(url_for("main.index"))
+
+    try:
+        current_app.logger.info(f"Attempting to extract article from URL: {url}")
+        article_meta = extract_article(url)
+
+        # Generate a unique hash for the URL to use as document ID
+        urlhash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+
+        # save_article_record expects meta, local_audio_path, gcs_url, urlhash, uid
+        # For direct submissions, audio_path and gcs_url are initially None
+        save_article_record(article_meta, None, None, urlhash, current_user_id())
+        flash(
+            "Article submitted successfully! It will appear in your feed soon.",
+            "success",
+        )
+        current_app.logger.info(
+            f"Article from URL {url} submitted by user {current_user_id()}"
+        )
+    except Exception as e:
+        current_app.logger.error(f"Error submitting article from URL {url}: {e}")
+        flash(f"Error submitting article: {e}", "error")
+
+    return redirect(url_for("main.index"))
 
 
 @bp.get("/jobs/<job_id>")

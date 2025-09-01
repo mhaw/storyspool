@@ -20,3 +20,5 @@ dataconnect-debug.log
 
 firebase-export-1756214884261ivNzmk/
 firestore-debug.log
+secrets/
+*.key.json

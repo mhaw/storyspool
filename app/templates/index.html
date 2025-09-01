@@ -8,4 +8,21 @@
         Sign In / Get Started
     </a>
 </div>
+
+<div class="max-w-md mx-auto bg-white p-8 rounded-lg shadow-md mt-8">
+    <h2 class="text-2xl font-bold mb-4 text-center">Submit an Article URL</h2>
+    <form action="{{ url_for('main.submit_article') }}" method="post">
+        <div class="mb-4">
+            <label for="article_url" class="block text-gray-700 text-sm font-bold mb-2">Article URL:</label>
+            <input type="url" id="article_url" name="article_url" placeholder="https://example.com/article" required
+                   class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline">
+        </div>
+        <div class="flex items-center justify-center">
+            <button type="submit"
+                    class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                Submit Article
+            </button>
+        </div>
+    </form>
+</div>
 {% endblock %}

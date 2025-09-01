@@ -5,6 +5,7 @@ from xml.etree import ElementTree as ET
 from flask import current_app
 
 from app.services.jobs import list_user_jobs
+from app.services.store import list_user_articles  # New import
 
 ITUNES_NS = "http://www.itunes.com/dtds/podcast-1.0.dtd"
 ATOM_NS = "http://www.w3.org/2005/Atom"
@@ -83,14 +84,16 @@ def build_feed(user_id: str, channel_info: dict, items_meta: list[dict]) -> str:
 
 
 def get_latest_items_for_user(user_id: str, limit: int = 100) -> list[dict]:
-    """Stub for fetching latest processed articles for a user."""
+    """Fetches latest processed articles and directly submitted articles for a user."""
+    all_items = []
+
+    # Fetch articles from jobs (processed articles)
     jobs = list_user_jobs(user_id, limit=limit, status="COMPLETED")
-    items = []
     for job in jobs:
         if not job.get("storage_path"):
             continue
         public_audio_url = f"https://storage.googleapis.com/{current_app.config['GCS_BUCKET_NAME']}/{job['storage_path']}"
-        items.append(
+        all_items.append(
             {
                 "guid": job["job_id"],
                 "title": job.get("article_title", "Untitled Article"),
@@ -101,6 +104,36 @@ def get_latest_items_for_user(user_id: str, limit: int = 100) -> list[dict]:
                 "enclosure_length": job.get("audio_size_bytes", 0),
                 "duration": job.get("audio_duration_seconds", 0),
                 "author": job.get("article_author", "StorySpool"),
+                "type": "job",  # Add type for debugging/distinction
             }
         )
-    return sorted(items, key=lambda x: x["pub_date"], reverse=True)
+
+    # Fetch articles submitted directly (not yet processed into audio)
+    submitted_articles = list_user_articles(user_id)
+    for article in submitted_articles:
+        # For directly submitted articles, there's no audio yet.
+        # We'll use a placeholder or indicate it's not available.
+        # The guid should be unique, using the urlhash from Firestore.
+        all_items.append(
+            {
+                "guid": article["id"],  # Using the urlhash as guid
+                "title": article.get("title", "Untitled Submitted Article"),
+                "summary": article.get("summary", ""),
+                "pub_date": (
+                    datetime.fromisoformat(article["created_at"])
+                    if "created_at" in article
+                    else datetime.now(timezone.utc)
+                ),
+                "source_url": article.get("url", ""),
+                "enclosure_url": article.get(
+                    "audio_url", ""
+                ),  # Will be empty initially
+                "enclosure_length": 0,  # No audio yet
+                "duration": 0,  # No audio yet
+                "author": article.get("author", "StorySpool"),
+                "type": "submitted",  # Add type for debugging/distinction
+            }
+        )
+
+    # Sort all items by publication date (newest first)
+    return sorted(all_items, key=lambda x: x["pub_date"], reverse=True)[:limit]

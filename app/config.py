@@ -5,8 +5,9 @@ class Config:
     APP_ENV = os.getenv("APP_ENV", "prod")
     # Cookie / scheme
     PREFERRED_URL_SCHEME = "https" if APP_ENV == "prod" else "http"
-    SESSION_COOKIE_SECURE = APP_ENV == "prod"
+    SESSION_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "True").lower() == "true"
     SESSION_COOKIE_SAMESITE = "Lax"
+    COOKIE_NAME = os.getenv("COOKIE_NAME", "storyspool_session")
     # Static caching: prod long cache, local no cache
     SEND_FILE_MAX_AGE_DEFAULT = 31536000 if APP_ENV == "prod" else 0
 
