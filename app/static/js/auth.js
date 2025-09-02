@@ -1,5 +1,16 @@
-// Initialize Firebase
-firebase.initializeApp(window.firebaseConfig);
+// Strict init from server-injected config; no dummy fallbacks
+(function () {
+  try {
+    const cfg = window.CONFIG && window.CONFIG.firebase;
+    if (!cfg || !cfg.apiKey) {
+      console.error("Missing Firebase runtime config; check env vars & injection.");
+      return;
+    }
+    firebase.initializeApp(cfg);
+  } catch (e) {
+    console.error("Firebase init error:", e);
+  }
+})();
 
 const auth = firebase.auth();
 const signInButton = document.getElementById('signInButton');
@@ -25,7 +36,7 @@ auth.onAuthStateChanged((user) => {
 signInButton.addEventListener('click', () => {
     const provider = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(provider)
-        .then((result) => {
+        .then(async (result) => {
             // Signed in
             console.log('User signed in:', result.user);
 
@@ -58,12 +69,23 @@ signInButton.addEventListener('click', () => {
 });
 
 // Sign Out
-signOutButton.addEventListener('click', () => {
-    auth.signOut()
-        .then(() => {
-            console.log('User signed out');
-        })
-        .catch((error) => {
-            console.error('Error during sign out:', error);
+signOutButton.addEventListener('click', async () => {
+    try {
+        await auth.signOut();
+        console.log('User signed out from Firebase');
+
+        const response = await fetch('/logout', {
+            method: 'POST',
+            credentials: 'include'
         });
+
+        if (response.ok) {
+            console.log('Session cookie cleared successfully.');
+            window.location.href = '/';
+        } else {
+            console.error('Failed to clear session cookie.');
+        }
+    } catch (error) {
+        console.error('Error during sign out:', error);
+    }
 });

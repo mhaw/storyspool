@@ -1,5 +1,7 @@
+import datetime
 import hashlib
 
+from firebase_admin import auth
 from flask import (
     Blueprint,
     Response,
@@ -7,6 +9,7 @@ from flask import (
     current_app,
     flash,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -40,7 +43,49 @@ def index():
     uid = current_user_id()
     if uid:
         return redirect(url_for("main.article_list"))
-    return render_template("index.html")
+    return render_template("index.html", firebase_config=current_app.config["FIREBASE"])
+
+
+@bp.post("/sessionLogin")
+def session_login():
+    """Creates a session cookie from a Firebase ID token."""
+    id_token = request.json.get("idToken")
+    if not id_token:
+        return jsonify({"error": "Missing ID token"}), 400
+
+    try:
+        # Set session expiration to 5 days.
+        expires_in = datetime.timedelta(days=5)
+        session_cookie = auth.create_session_cookie(id_token, expires_in=expires_in)
+        response = jsonify({"status": "success"})
+        expires = datetime.datetime.now() + expires_in
+        response.set_cookie(
+            current_app.config["COOKIE_NAME"],
+            session_cookie,
+            expires=expires,
+            httponly=True,
+            secure=current_app.config["SESSION_COOKIE_SECURE"],
+            samesite=current_app.config["SESSION_COOKIE_SAMESITE"],
+        )
+        return response
+    except Exception as e:
+        current_app.logger.error(f"Failed to create session cookie: {e}")
+        return jsonify({"error": "Failed to create session cookie"}), 401
+
+
+@bp.post("/logout")
+def logout():
+    """Clears the session cookie."""
+    response = make_response(jsonify({"status": "success"}))
+    response.set_cookie(
+        current_app.config["COOKIE_NAME"],
+        "",
+        expires=0,
+        httponly=True,
+        secure=current_app.config["SESSION_COOKIE_SECURE"],
+        samesite=current_app.config["SESSION_COOKIE_SAMESITE"],
+    )
+    return response
 
 
 @bp.get("/articles")
@@ -49,7 +94,12 @@ def article_list():
     uid = current_user_id()
     jobs = list_user_jobs(uid)
     feed_url = url_for("main.user_feed", uid=uid, _external=True)  # noqa: F841
-    return render_template("articles.html", jobs=jobs, feed_url=feed_url)
+    return render_template(
+        "articles.html",
+        jobs=jobs,
+        feed_url=feed_url,
+        firebase_config=current_app.config["FIREBASE"],
+    )
 
 
 @bp.post("/jobs")
@@ -65,38 +115,6 @@ def create_ingest_job():
     enqueue_worker(doc["id"])
     flash("Job queued.")
     return jsonify({"job_id": doc["id"], "status": doc["status"]}), 202
-
-
-@bp.post("/submit_article")
-@require_login
-def submit_article():
-    url = request.form.get("article_url")
-    if not url:
-        flash("Please provide an article URL.", "error")
-        return redirect(url_for("main.index"))
-
-    try:
-        current_app.logger.info(f"Attempting to extract article from URL: {url}")
-        article_meta = extract_article(url)
-
-        # Generate a unique hash for the URL to use as document ID
-        urlhash = hashlib.sha256(url.encode("utf-8")).hexdigest()
-
-        # save_article_record expects meta, local_audio_path, gcs_url, urlhash, uid
-        # For direct submissions, audio_path and gcs_url are initially None
-        save_article_record(article_meta, None, None, urlhash, current_user_id())
-        flash(
-            "Article submitted successfully! It will appear in your feed soon.",
-            "success",
-        )
-        current_app.logger.info(
-            f"Article from URL {url} submitted by user {current_user_id()}"
-        )
-    except Exception as e:
-        current_app.logger.error(f"Error submitting article from URL {url}: {e}")
-        flash(f"Error submitting article: {e}", "error")
-
-    return redirect(url_for("main.index"))
 
 
 @bp.get("/jobs/<job_id>")
@@ -139,14 +157,16 @@ def task_worker():
 
 
 @bp.get("/u/<uid>/feed.xml")
+@require_login
 def user_feed(uid):
     """Generates the user's podcast feed on-demand with caching."""
-    if not uid:
-        current_app.logger.warning("Attempted to access user feed with empty UID.")
-        abort(400, description="User ID is required for feed.")
+    if not uid or uid != current_user_id():
+        current_app.logger.warning(
+            "Attempted to access feed for another user or with empty UID."
+        )
+        abort(403, description="Forbidden")
 
     try:
-        # TODO: Add authorization check if feeds are not public.
         items = rss.get_latest_items_for_user(uid, limit=100)
 
         user = {

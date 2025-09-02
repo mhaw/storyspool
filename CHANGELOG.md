@@ -1,6 +1,9 @@
 # Changelog
 
 ### Unreleased
+- **fix(ui):** Fixed landing page layout regression.
+- **fix(ui):** Removed broken favicon link.
+- **fix(auth):** Corrected session cookie `SameSite` attribute to allow cross-origin requests.
 - **feat(auth)**: Added client-side Firebase authentication logic (`app/static/js/auth.js`) to handle Google Sign-In/Sign-Out and update UI based on authentication state.
 - **docs**: Added test account login instructions to `README.md`.
 - **fix(auth)**: Removed hardcoded Firebase config; inject from env.

@@ -11,7 +11,6 @@ except Exception:  # talisman optional in local
     Talisman = None
 from .config import Config
 from .routes import bp  # Import the blueprint (it's named 'bp' in app/routes.py)
-from .routes.auth_sessions import auth_bp  # Import the new auth blueprint
 
 
 def create_app():
@@ -49,10 +48,13 @@ def create_app():
             force_https=(app.config["PREFERRED_URL_SCHEME"] == "https"),
         )
 
-    # Expose Firebase Web config to templates
+    # Expose Firebase Web config and static version to templates
     @app.context_processor
     def inject_web_config():
-        return {"FIREBASE_WEB_CONFIG": app.config["FIREBASE"]}
+        return {
+            "FIREBASE_WEB_CONFIG": app.config["FIREBASE"],
+            "STATIC_VERSION": app.config["STATIC_VERSION"],
+        }
 
     # Add long cache headers for static in prod
     @app.after_request
@@ -90,6 +92,5 @@ def create_app():
 
     # Register blueprints
     app.register_blueprint(bp)  # Register the blueprint
-    app.register_blueprint(auth_bp)  # Register the new auth blueprint
 
     return app
