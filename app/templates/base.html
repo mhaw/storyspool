@@ -15,13 +15,7 @@
         .auth-status button { margin-left: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; border: 1px solid #ccc; background-color: #f0f0f0; cursor: pointer; }
     </style>
     <script>
-      window.CONFIG = {{ {
-        "firebase": {
-          "apiKey": config.get("FIREBASE_WEB_API_KEY", ""),
-          "authDomain": config.get("FIREBASE_AUTH_DOMAIN", ""),
-          "projectId": config.get("FIREBASE_PROJECT_ID", "")
-        }
-      } | tojson }};
+      window.__FIREBASE_CONFIG__ = {{ FIREBASE_WEB_CONFIG|tojson }};
     </script>
 </head>
 <body class="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">

@@ -1,7 +1,7 @@
 // Strict init from server-injected config; no dummy fallbacks
 (function () {
   try {
-    const cfg = window.CONFIG && window.CONFIG.firebase;
+    const cfg = window.__FIREBASE_CONFIG__;
     if (!cfg || !cfg.apiKey) {
       console.error("Missing Firebase runtime config; check env vars & injection.");
       return;
