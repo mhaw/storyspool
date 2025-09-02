@@ -47,7 +47,7 @@ jobs:
       - name: Deploy to Cloud Run
         uses: 'google-github-actions/deploy-cloudrun@v2'
         with:
-          service_id: 'storyspool-mvp'
+          service: 'storyspool-mvp'
           region: ${{ secrets.GCP_REGION }}
           source: '.'
           flags: '--allow-unauthenticated'
