@@ -1,33 +1,36 @@
-# StorySpool Deployment Log
+# Deployment Guide
 
-## Staging Environment
+This document outlines the process for deploying the StorySpool application to the staging and production environments.
 
-### Deployment: 2025-08-31 (UTC)
+## Environments
 
-*   **Service:** `storyspool-staging`
-*   **Region:** `us-central1`
-*   **Revision ID:** `storyspool-staging-00001-vvf`
-*   **Service URL:** `https://storyspool-staging-417579885597.us-central1.run.app`
-*   **Changes:** Implemented user article submission and feed integration. Includes new `/submit_article` route, Firestore integration, and RSS updates.
-*   **Health Check (`/health`):** `ok`
+- **Staging (`storyspool-staging`):** A production-like environment for testing and verifying new features before they go live. This environment should be used for all integration testing and final verification.
+- **Production (`storyspool-mvp`):** The live environment that serves end-users.
 
----
+## Deployment Workflow
 
-## Staging Deployment Notes
+The standard workflow for deploying changes is as follows:
 
-**Date:** 2025-08-31
-**Service:** `storyspool-staging`
-**URL:** `https://storyspool-staging-417579885597.us-central1.run.app`
-**Revision ID:** `storyspool-staging-00003-kz4`
-**Image Tag:** `us-docker.pkg.dev/storyspool-be776/storyspool-staging/storyspool-staging:20250831-234658`
+1.  **Develop Locally:** All new features and bug fixes should be developed and tested on your local machine first.
+2.  **Push to `main`:** Once changes are complete and tested locally, push them to the `main` branch on GitHub.
+3.  **Deploy to Staging:** Deploy the latest code from the `main` branch to the staging environment using the following command:
+    ```bash
+    make deploy-staging
+    ```
+4.  **Verify on Staging:** Thoroughly test the deployed changes on the staging URL (`https://storyspool-staging-417579885597.us-central1.run.app`). This includes:
+    -   Performing a hard refresh (Cmd+Shift+R or Ctrl+Shift+R) to avoid browser cache issues.
+    -   Checking for any console errors.
+    -   Testing the core functionality of the application.
+5.  **Deploy to Production:** Once the changes have been verified on staging, deploy them to the production environment.
+    *Note: A `deploy-prod` target does not currently exist in the `Makefile`. You can create one based on the `deploy-staging` target, or run the `gcloud run deploy` command manually, ensuring you target the `storyspool-mvp` service.*
 
-**Environment Variables Set:**
-*   `FIREBASE_API_KEY`: AIzaSyAgWw6PAqcJUFolPDWVYcKxKRP7IwiYLko
-*   `FIREBASE_AUTH_DOMAIN`: storyspool-be776.firebaseapp.com
-*   `FIREBASE_PROJECT_ID`: storyspool-be776
-*   `FIREBASE_APP_ID`: 1:417579885597:web:af29447d245af4f7c9d2f4
-*   `FIREBASE_MEASUREMENT_ID`: G-FYE0G370KM
-*   `GOOGLE_CLOUD_PROJECT`: storyspool-be776
-*   `PUBLIC_BASE_URL`: https://storyspool-staging-417579885597.us-central1.run.app
+    Example command to create a `deploy-prod` target in your `Makefile`:
+    ```makefile
+    deploy-prod:
+    	gcloud run deploy storyspool-mvp \
+    		--image us-docker.pkg.dev/$(PROJECT_ID)/$(AR_REPO)/storyspool-staging:$(TAG) \
+    		--region $(REGION) \
+    		--allow-unauthenticated
+    ```
 
-**Health Check:** Passed (HTTP 200 OK)
+This structured approach ensures that all changes are tested in a safe environment before being released to users, which helps maintain a stable and reliable service.

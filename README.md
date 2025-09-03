@@ -33,3 +33,8 @@ Use Google Sign-In with any Google account.
 - Firebase config is injected at render time; no hardcoded keys in templates.
 - CSP is enforced in prod for Firebase + Google fonts/scripts.
 - Static assets are cacheable in prod (long TTL).
+
+## Deployment
+This project uses a staging and production environment on Google Cloud Run. A structured deployment workflow is used to ensure changes are tested before reaching users.
+
+For the detailed deployment process and environment information, please see [DEPLOY.md](DEPLOY.md).
